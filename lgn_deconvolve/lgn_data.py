@@ -26,6 +26,9 @@ class LGNData:
         self.stimuli_dataset_test = self.dataset['stim'][self.num_train_data:]
         self.response_dataset_test = self.dataset['resp'][self.num_train_data:]
 
+        self.stimuli_shape = self.stimuli_dataset_train[0].shape
+        self.response_shape = self.response_dataset_train[0].shape
+
         self.num_test_data = len(self.stimuli_dataset_test)
 
     def get_train(self):
