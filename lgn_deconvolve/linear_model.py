@@ -101,9 +101,9 @@ class LinearNetwork:
         self.response_shape = None
         self.ln_model = None
 
-        self.learning_rate = 0.001
-        self.num_epochs = 100
-        self.batch_size = 512 * 4
+        self.learning_rate = 0.02
+        self.num_epochs = 200
+        self.batch_size = 512 * 12
         self.num_workers = 12
 
     def fit(self, response, stimuli):
@@ -114,15 +114,18 @@ class LinearNetwork:
             LinearNetwork.LGNDataset(response, stimuli),
             batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_trn.dataset), "samples")
-        num_batches_in_epoch = len(dataloader_trn.dataset) / self.batch_size
+        num_samples = len(dataloader_trn.dataset)
+        num_batches_in_epoch = num_samples / self.batch_size
 
         criterion_mse = nn.MSELoss(reduction='none')
         optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+        # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0005, patience=3)
 
         print("Starting Training Loop...")
         # For each epoch
         for epoch in range(self.num_epochs):
+            epoch_mse_loss = torch.zeros((1, )).to(device, dtype=torch.float)
             # For each batch in the dataloader
             for i, data in enumerate(dataloader_trn, 0):
                 data_stimulus = data['stimulus'].to(device, dtype=torch.float)
@@ -133,19 +136,24 @@ class LinearNetwork:
                 # Compute the predictions
                 predictions = ln_model(data_response)
                 # Compute the loss
-                loss_mse = criterion_mse(data_stimulus, predictions).mean()
+                loss_mse = criterion_mse(data_stimulus, predictions)
+                epoch_mse_loss += loss_mse.mean(dim=1).mean(dim=1).mean(dim=1).sum()
+                loss_mse = loss_mse.mean()
                 # Backpropagate the loss
                 loss_mse.backward()
                 optimizer.step()
 
                 # Current state info
-                print(" - epoch {}/{}, batch {}/{}: MSE loss {}"
+                print(" - epoch {}/{}, batch {}/{:.1f}: MSE loss {}"
                       .format(epoch, self.num_epochs, i + 1, num_batches_in_epoch, loss_mse.item()))
                 if loss_mse.item() < best_loss:
                     best_loss = loss_mse.item()
                     best_epoch = epoch
+            epoch_mse_loss = epoch_mse_loss / num_samples
+            print(" + epoch {}/{}: MSE loss {}, LR {}".format(epoch, self.num_epochs, epoch_mse_loss.item(),
+                                                              scheduler.state_dict()))
             # Adjust the learning rate
-            scheduler.step()
+            scheduler.step(epoch_mse_loss)
 
         return ln_model, best_loss, best_epoch
 
@@ -158,6 +166,11 @@ class LinearNetwork:
         self.ln_model.to(device)
 
         self.ln_model.train()
+
+        if os.path.exists(self.model_name):
+            checkpoint = torch.load(self.model_path)
+            print("Loaded network with best loss {}, epoch {}".format(checkpoint['best_loss'], checkpoint['epoch']))
+            self.ln_model.load_state_dict(checkpoint['network'])
 
         # Train the network if not available
         if not os.path.exists(self.model_name):
@@ -173,12 +186,6 @@ class LinearNetwork:
                 os.mkdir(self.model_name)
             torch.save(state, self.model_path)
             self.ln_model = ln_model
-
-            return
-
-        checkpoint = torch.load(self.model_path)
-        print("Loaded network with best loss {}, epoch {}".format(checkpoint['best_loss'], checkpoint['epoch']))
-        self.ln_model.load_state_dict(checkpoint['network'])
 
     def predict(self, response_np):
         if self.ln_model is None:
