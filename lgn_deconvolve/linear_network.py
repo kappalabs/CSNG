@@ -1,5 +1,8 @@
 import os
+from typing import Tuple
+
 import torch
+import torch.utils.data
 
 import numpy as np
 import torch.nn as nn
@@ -7,12 +10,12 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 
 # Decide which device we want to run on
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 print('device', device)
 
 
-class LinearNetwork:
+class LinearNetworkModel:
 
     class LGNDataset(torch.utils.data.Dataset):
 
@@ -78,7 +81,7 @@ class LinearNetwork:
     class NNModel(nn.Module):
 
         def __init__(self, stimuli_shape, response_shape):
-            super(LinearNetwork.NNModel, self).__init__()
+            super(LinearNetworkModel.NNModel, self).__init__()
 
             self.stimuli_shape = stimuli_shape
             self.response_shape = response_shape
@@ -93,7 +96,7 @@ class LinearNetwork:
             return out_img
 
     def __init__(self, model_name: str):
-        self.model = None
+        self.model = None  # type: LinearNetworkModel.NNModel
         self.model_name = model_name
         self.model_path = os.path.join(model_name, 'network.weights')
 
@@ -104,6 +107,7 @@ class LinearNetwork:
         self.learning_rate = 0.02
         self.num_epochs = 200
         self.batch_size = 512 * 12
+        self.batch_size = 35000
         self.num_workers = 12
 
     def fit(self, response, stimuli):
@@ -111,7 +115,7 @@ class LinearNetwork:
 
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
-            LinearNetwork.LGNDataset(response, stimuli),
+            LinearNetworkModel.LGNDataset(response, stimuli),
             batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_trn.dataset), "samples")
         num_samples = len(dataloader_trn.dataset)
@@ -119,7 +123,6 @@ class LinearNetwork:
 
         criterion_mse = nn.MSELoss(reduction='none')
         optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
-        # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0005, patience=3)
 
         print("Starting Training Loop...")
@@ -157,12 +160,9 @@ class LinearNetwork:
 
         return ln_model, best_loss, best_epoch
 
-    def train(self, stimuli, response):
-        self.stimuli_shape = stimuli.shape[-2:]
-        self.response_shape = response.shape[-2:]
-
+    def load(self, stimuli_shape, response_shape):
         # Define the network
-        self.ln_model = LinearNetwork.NNModel(self.stimuli_shape, self.response_shape)
+        self.ln_model = LinearNetworkModel.NNModel(stimuli_shape, response_shape)
         self.ln_model.to(device)
 
         self.ln_model.train()
@@ -171,6 +171,12 @@ class LinearNetwork:
             checkpoint = torch.load(self.model_path)
             print("Loaded network with best loss {}, epoch {}".format(checkpoint['best_loss'], checkpoint['epoch']))
             self.ln_model.load_state_dict(checkpoint['network'])
+
+    def train(self, stimuli, response):
+        self.stimuli_shape = stimuli.shape[-2:]
+        self.response_shape = response.shape[-2:]
+
+        self.load(self.stimuli_shape, self.response_shape)
 
         # Train the network if not available
         if not os.path.exists(self.model_name):
@@ -195,7 +201,7 @@ class LinearNetwork:
 
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
-            LinearNetwork.LGNDataset(response_np, None),
+            LinearNetworkModel.LGNDataset(response_np, None),
             batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_trn.dataset), "samples")
 
@@ -214,5 +220,14 @@ class LinearNetwork:
 
         return prediction
 
-    def get_kernel(self, position):
-        pass
+    def get_kernel(self) -> Tuple[np.ndarray, np.ndarray]:
+        if self.ln_model is None:
+            raise Exception("Model not trained")
+
+        weights = self.ln_model.fc1.weight.detach().cpu().numpy()
+        biases = self.ln_model.fc1.bias.detach().cpu().numpy()
+
+        weights = np.reshape(weights, (-1, 51, 51))
+        biases = np.reshape(biases, (110, 110))
+
+        return weights, biases
