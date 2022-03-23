@@ -62,8 +62,8 @@ class LinearNetworkModel:
             if self.response_dataset is not None:
                 response_raw = self.response_dataset[idx]
 
-                # response = transforms.ToTensor()(response_raw)
-                response = transforms.ToTensor()(response_raw + self.response_offsets)
+                response = transforms.ToTensor()(response_raw)
+                # response = transforms.ToTensor()(response_raw + self.response_offsets)
                 # response = transforms.ToTensor()(response_raw + self.response_offsets) / self.response_stds
 
             stimulus = torch.zeros((1, ))
@@ -86,7 +86,8 @@ class LinearNetworkModel:
             self.stimuli_shape = stimuli_shape
             self.response_shape = response_shape
 
-            self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1], bias=True)
+            # self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1], bias=True)
+            self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1], bias=False)
 
         def forward(self, x):
             x = nn.Flatten()(x)
@@ -95,23 +96,30 @@ class LinearNetworkModel:
 
             return out_img
 
-    def __init__(self, model_name: str):
-        self.model = None  # type: LinearNetworkModel.NNModel
+    def __init__(self, model_name: str, init_zeros=False):
+        self.model = None
         self.model_name = model_name
         self.model_path = os.path.join(model_name, 'network.weights')
 
         self.stimuli_shape = None
         self.response_shape = None
-        self.ln_model = None
+        self.init_zeros = init_zeros
 
-        self.learning_rate = 0.02
-        self.num_epochs = 200
+        self.learning_rate = 0.3
+        self.num_epochs = 100
         self.batch_size = 512 * 12
         self.batch_size = 35000
         self.num_workers = 12
 
+    def _init_zeros(self):
+        nn.init.zeros_(self.model.fc1.weight.data)
+        if self.model.fc1.bias is not None:
+            nn.init.zeros_(self.model.fc1.bias.data)
+
     def fit(self, response, stimuli):
-        ln_model, best_loss, best_epoch = self.ln_model, float("inf"), 0
+        ln_model, best_loss, best_epoch = self.model, float("inf"), 0
+
+        self.batch_size = response.shape[0]
 
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
@@ -122,8 +130,11 @@ class LinearNetworkModel:
         num_batches_in_epoch = num_samples / self.batch_size
 
         criterion_mse = nn.MSELoss(reduction='none')
-        optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0005, patience=3)
+        # optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
+        # optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0, momentum=0.7)
+        optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=3,
+                                                         cooldown=4, verbose=True)
 
         print("Starting Training Loop...")
         # For each epoch
@@ -148,56 +159,67 @@ class LinearNetworkModel:
 
                 # Current state info
                 print(" - epoch {}/{}, batch {}/{:.1f}: MSE loss {}"
-                      .format(epoch, self.num_epochs, i + 1, num_batches_in_epoch, loss_mse.item()))
+                      .format(epoch + 1, self.num_epochs, i + 1, num_batches_in_epoch, loss_mse.item()))
                 if loss_mse.item() < best_loss:
                     best_loss = loss_mse.item()
                     best_epoch = epoch
             epoch_mse_loss = epoch_mse_loss / num_samples
-            print(" + epoch {}/{}: MSE loss {}, LR {}".format(epoch, self.num_epochs, epoch_mse_loss.item(),
+            print(" + epoch {}/{}: MSE loss {}, LR {}".format(epoch + 1, self.num_epochs, epoch_mse_loss.item(),
                                                               scheduler.state_dict()))
+
             # Adjust the learning rate
-            scheduler.step(epoch_mse_loss)
+            if epoch >= 5:
+                scheduler.step(epoch_mse_loss)
 
         return ln_model, best_loss, best_epoch
 
     def load(self, stimuli_shape, response_shape):
         # Define the network
-        self.ln_model = LinearNetworkModel.NNModel(stimuli_shape, response_shape)
-        self.ln_model.to(device)
+        self.model = LinearNetworkModel.NNModel(stimuli_shape, response_shape)
+        self.model.to(device)
 
-        self.ln_model.train()
+        if self.init_zeros:
+            self._init_zeros()
 
+        best_loss = float("inf")
         if os.path.exists(self.model_name):
             checkpoint = torch.load(self.model_path)
-            print("Loaded network with best loss {}, epoch {}".format(checkpoint['best_loss'], checkpoint['epoch']))
-            self.ln_model.load_state_dict(checkpoint['network'])
+            best_loss = checkpoint['best_loss']
+            print("Loaded network with best loss {}, epoch {}".format(best_loss, checkpoint['epoch']))
+            self.model.load_state_dict(checkpoint['network'])
 
-    def train(self, stimuli, response):
+        return best_loss
+
+    def train(self, stimuli, response, continue_training=False):
         self.stimuli_shape = stimuli.shape[-2:]
         self.response_shape = response.shape[-2:]
 
-        self.load(self.stimuli_shape, self.response_shape)
+        best_loss = self.load(self.stimuli_shape, self.response_shape)
+        self.model.train()
 
         # Train the network if not available
-        if not os.path.exists(self.model_name):
+        if not os.path.exists(self.model_name) or continue_training:
             print("Training new network...")
-            ln_model, best_loss, epoch = self.fit(response, stimuli)
+            ln_model, loss, epoch = self.fit(response, stimuli)
 
-            state = {
-                'network': ln_model.state_dict(),
-                'best_loss': best_loss,
-                'epoch': epoch,
-            }
-            if not os.path.isdir(self.model_name):
-                os.mkdir(self.model_name)
-            torch.save(state, self.model_path)
-            self.ln_model = ln_model
+            if loss < best_loss:
+                print(" - new loss {} is better than previous {} -> saving the new model...".format(loss, best_loss))
+                best_loss = loss
+                state = {
+                    'network': ln_model.state_dict(),
+                    'best_loss': best_loss,
+                    'epoch': epoch,
+                }
+                if not os.path.isdir(self.model_name):
+                    os.mkdir(self.model_name)
+                torch.save(state, self.model_path)
+                self.model = ln_model
 
     def predict(self, response_np):
-        if self.ln_model is None:
+        if self.model is None:
             raise Exception("Model not trained")
 
-        self.ln_model.eval()
+        self.model.eval()
 
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
@@ -210,7 +232,7 @@ class LinearNetworkModel:
         for i, data in enumerate(dataloader_trn, 0):
             data_response = data['response'].to(device, dtype=torch.float)
 
-            prediction = self.ln_model(data_response).detach().cpu().numpy()
+            prediction = self.model(data_response).detach().cpu().numpy()
             if predictions is None:
                 predictions = prediction
             else:
@@ -221,11 +243,14 @@ class LinearNetworkModel:
         return prediction
 
     def get_kernel(self) -> Tuple[np.ndarray, np.ndarray]:
-        if self.ln_model is None:
+        if self.model is None:
             raise Exception("Model not trained")
 
-        weights = self.ln_model.fc1.weight.detach().cpu().numpy()
-        biases = self.ln_model.fc1.bias.detach().cpu().numpy()
+        weights = self.model.fc1.weight.detach().cpu().numpy()
+        if self.model.fc1.bias is not None:
+            biases = self.model.fc1.bias.detach().cpu().numpy()
+        else:
+            biases = np.zeros((110, 110))
 
         weights = np.reshape(weights, (-1, 51, 51))
         biases = np.reshape(biases, (110, 110))
