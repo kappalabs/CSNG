@@ -5,31 +5,71 @@ import torch
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import torchvision.transforms as transforms
 
 from lgn_deconvolve.lgn_data import LGNData
 from lgn_deconvolve.linear_network import LinearNetworkModel
 from lgn_deconvolve.linear_regression import LinearRegressionModel
+from lgn_deconvolve.convolution_network import ConvolutionalNetworkModel
 
 
 class ModelEvaluator:
 
     @staticmethod
-    def evaluate_mean_loss(gold_data, prediction_data, loss):
+    def evaluate_mean_loss(gold_data, prediction_data, loss, transform):
         num_samples = gold_data.shape[0]
-        sums = torch.zeros((gold_data.shape[1], gold_data.shape[2]))
+        sums = 0
         for sample_idx in range(num_samples):
             gold_dato = torch.from_numpy(gold_data[sample_idx]).squeeze()
             prediction_dato = torch.from_numpy(prediction_data[sample_idx]).squeeze()
+            if transform is not None:
+                gold_dato = transform(gold_dato)
+                prediction_dato = transform(prediction_dato)
             sums += loss(gold_dato, prediction_dato)
 
         return sums / num_samples
 
     @staticmethod
-    def evaluate_l1_whole(gold_data, prediction_data):
-        criterion_l1 = nn.L1Loss(reduction='none')
-        loss_l1 = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_l1)
+    def evaluate_mse_whole(gold_data, prediction_data, transform=None):
+        criterion_l1 = nn.MSELoss(reduction='none')
+        loss_l1 = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_l1, transform)
 
         return loss_l1
+
+    @staticmethod
+    def evaluate_l1_whole(gold_data, prediction_data, transform=None):
+        criterion_l1 = nn.L1Loss(reduction='none')
+        loss_l1 = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_l1, transform)
+
+        return loss_l1
+
+    @staticmethod
+    def evaluate(data, model):
+        gold_data = data.stimuli_dataset_test
+        gold_labels = data.response_dataset_test
+
+        # Compute the predictions on testing dataset
+        print("Computing predictions...")
+        prediction_data = model.predict(gold_labels)
+        print(" - computed the predictions on {} samples".format(data.num_test_data))
+
+        CROP_SIZE = 64
+        transform_crop = transforms.Compose([
+            transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
+        ])
+
+        # Compute the losses
+        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_data, prediction_data)
+        print(" - L1:", loss_l1.mean().item())
+
+        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_data, prediction_data, transform_crop)
+        print(" - L1 central:", loss_l1.mean().item())
+
+        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_data, prediction_data)
+        print(" - MSE:", loss_mse.mean().item())
+
+        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_data, prediction_data, transform_crop)
+        print(" - MSE central:", loss_mse.mean().item())
 
     @staticmethod
     def save_filters(filters_dir, name_prefix, weights, biases):
@@ -61,7 +101,7 @@ class ModelEvaluator:
         plt.close()
 
 
-if __name__ == '__main__':
+def main():
     data = LGNData()
 
     for percent_part_100 in range(10, 110, 10):
@@ -80,13 +120,10 @@ if __name__ == '__main__':
         lrm = LinearRegressionModel(model_name)
         print("Training the LR model")
         lrm.train(train_stimuli_subset, train_response_subset)
-        lr_predictions = lrm.predict(data.response_dataset_test)
-        print("Computed LR predictions")
 
         # Evaluate the model
-        print("Evaluating LR (#train {}) model on {} samples".format(train_samples, data.num_test_data))
-        loss_lr_l1 = ModelEvaluator.evaluate_l1_whole(data.stimuli_dataset_test, lr_predictions)
-        print(loss_lr_l1.mean().item())
+        print("Evaluating LR (#train {}) model".format(train_samples))
+        ModelEvaluator.evaluate(data, lrm)
 
         # Save the filters
         w, b = lrm.get_kernel()
@@ -98,17 +135,14 @@ if __name__ == '__main__':
         # Second model - linear network
 
         # Train second model
-        model_name = "linear_network_model_{}%".format(int(percent_part * 100))
-        lnm = LinearNetworkModel(model_name)
+        model_name = "linear_network_model_nobias_nodatanorm_init0_{}%".format(int(percent_part * 100))
+        lnm = LinearNetworkModel(model_name, init_zeros=True)
         print("Training the LN model")
-        lnm.train(train_stimuli_subset, train_response_subset)
-        lnm_predictions = lnm.predict(data.response_dataset_test)
-        print("Computed LN predictions")
+        lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
         # Evaluate the model
-        print("Evaluating LN (#train {}) model on {} samples".format(train_samples, data.num_test_data))
-        loss_ln_l1 = ModelEvaluator.evaluate_l1_whole(data.stimuli_dataset_test, lnm_predictions)
-        print(loss_ln_l1.mean().item())
+        print("Evaluating LN (#train {}) model".format(train_samples))
+        ModelEvaluator.evaluate(data, lnm)
 
         # Save the filters
         w, b = lnm.get_kernel()
@@ -116,4 +150,52 @@ if __name__ == '__main__':
 
         print("-------------------")
 
+        # #
+        # # Third model - convolutional network
+        #
+        # # Train second model
+        # model_name = "convolution_network_model_{}%".format(int(percent_part * 100))
+        # cnm = ConvolutionalNetworkModel(model_name)
+        # print("Training the CN model")
+        # cnm.train(train_stimuli_subset, train_response_subset)
+        # lnm_predictions = cnm.predict(data.response_dataset_test)
+        # print("Computed CN predictions")
+        #
+        # # Evaluate the model
+        # print("Evaluating CN (#train {}) model on {} samples".format(train_samples, data.num_test_data))
+        # loss_ln_l1 = ModelEvaluator.evaluate_l1_whole(data.stimuli_dataset_test, lnm_predictions)
+        # print(loss_ln_l1.mean().item())
+        #
+        # # Save the filters
+        # w, b = cnm.get_kernel()
+        # ModelEvaluator.save_filters("{}_CN".format(time.time()), "deconv_filter_CN_", w, b)
+        #
+        # print("-------------------")
+        #
+        # #
+        # # Third model - linear network zeroed
+        #
+        # # Train second model
+        # model_name = "linear_network_zeroed_model_{}%".format(int(percent_part * 100))
+        # lnm = LinearNetworkModel(model_name, init_zeros=True)
+        # print("Training the LN-zero model")
+        # lnm.train(train_stimuli_subset, train_response_subset)
+        # lnm_predictions = lnm.predict(data.response_dataset_test)
+        # print("Computed LN-zero predictions")
+        #
+        # # Evaluate the model
+        # print("Evaluating LN-zero (#train {}) model on {} samples".format(train_samples, data.num_test_data))
+        # loss_ln_l1 = ModelEvaluator.evaluate_l1_whole(data.stimuli_dataset_test, lnm_predictions)
+        # print(loss_ln_l1.mean().item())
+        #
+        # # Save the filters
+        # w, b = lnm.get_kernel()
+        # ModelEvaluator.save_filters("{}_LN-zero".format(time.time()), "deconv_filter_LN_", w, b)
+        #
+        # print("-------------------")
+
         print("\n===================")
+
+
+if __name__ == '__main__':
+    main()
