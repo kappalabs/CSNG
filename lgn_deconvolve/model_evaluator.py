@@ -73,14 +73,15 @@ class ModelEvaluator:
 
     @staticmethod
     def save_filters(filters_dir, name_prefix, weights, biases):
-        if not os.path.exists(filters_dir):
-            os.mkdir(filters_dir)
+        os.makedirs(filters_dir, exist_ok=True)
+        print("filters_dir", filters_dir)
 
         for position_idx in range(110 * 110):
             if position_idx != 110 * 55 + 55:
                 continue
 
             out_file = os.path.join(filters_dir, "{}_weight_{:04d}".format(name_prefix, position_idx))
+            print("out_file", out_file)
 
             plt.figure(figsize=(5, 5))
             plt.subplot(1, 1, 1)
@@ -104,30 +105,30 @@ class ModelEvaluator:
 def main():
     data = LGNData()
 
-    for percent_part_100 in range(10, 110, 10):
+    for percent_part_100 in range(50, 100, 10):
         # Select part of the training set to train on
         percent_part = percent_part_100 / 100.
         train_samples = int(percent_part * data.num_train_data)
         print("Using {} samples for training out of {}".format(train_samples, data.num_train_data))
         train_stimuli_subset = data.stimuli_dataset_train[:train_samples]
         train_response_subset = data.response_dataset_train[:train_samples]
+        percent_subfolder = "{}%".format(int(percent_part * 100))
 
         #
         # First model - linear regression
 
         # Train first model
-        model_name = "linear_regression_model_{}%.pkl".format(int(percent_part * 100))
-        lrm = LinearRegressionModel(model_name)
-        print("Training the LR model")
+        lrm = LinearRegressionModel(percent_subfolder)
+        print("Training the LR model", lrm.model_name)
         lrm.train(train_stimuli_subset, train_response_subset)
 
         # Evaluate the model
-        print("Evaluating LR (#train {}) model".format(train_samples))
+        print("Evaluating LR (#train {}) model {}".format(train_samples, lrm.model_name))
         ModelEvaluator.evaluate(data, lrm)
 
         # Save the filters
         w, b = lrm.get_kernel()
-        ModelEvaluator.save_filters("{}_LR".format(time.time()), "deconv_filter_LR_", w, b)
+        ModelEvaluator.save_filters(os.path.join(lrm.model_path), "deconv_filter", w, b)
 
         print("-------------------")
 
@@ -135,9 +136,11 @@ def main():
         # Second model - linear network
 
         # Train second model
-        model_name = "linear_network_model_nobias_nodatanorm_init0_{}%".format(int(percent_part * 100))
-        lnm = LinearNetworkModel(model_name, init_zeros=True)
-        print("Training the LN model")
+        # lnm = LinearNetworkModel(percent_subfolder, init_zeros=True, use_crop=False)
+        lnm = LinearNetworkModel(percent_subfolder, init_zeros=True, use_crop=True)
+        # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
+        # lnm = LinearNetworkModel(model_name, init_zeros=True, use_crop=True, init_kernel=w)
+        print("Training the LN model", lnm.model_name)
         lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
         # Evaluate the model
@@ -146,7 +149,7 @@ def main():
 
         # Save the filters
         w, b = lnm.get_kernel()
-        ModelEvaluator.save_filters("{}_LN".format(time.time()), "deconv_filter_LN_", w, b)
+        ModelEvaluator.save_filters(os.path.join(lnm.model_path, "{}".format(time.time_ns())), "deconv_filter", w, b)
 
         print("-------------------")
 
