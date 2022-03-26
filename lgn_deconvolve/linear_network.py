@@ -105,11 +105,11 @@ class LinearNetworkModel:
         self.use_bias = use_bias
         self.datanorm = datanorm
 
-        self.learning_rate = 0.1
+        self.learning_rate = 0.2
         self.num_epochs = 50
         self.batch_size = 512 * 12  # Fits into the GPU (<4GB)
         self.batch_size = 35000
-        self.num_workers = 12
+        self.num_workers = 8
 
         self.model = None
         self.model_name = self.get_name()
@@ -164,9 +164,9 @@ class LinearNetworkModel:
 
         criterion_mse = nn.MSELoss(reduction='none')
         # optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
-        # optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0, momentum=0.1)
-        optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=5,
+        optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0, momentum=0.99)
+        # optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=3,
                                                          cooldown=4, verbose=True)
 
         transform_crop = None
@@ -201,8 +201,9 @@ class LinearNetworkModel:
                 optimizer.step()
 
                 # Current state info
-                print("   - epoch {}/{}, batch {}/{:.1f}: MSE loss {}"
-                      .format(epoch + 1, self.num_epochs, i + 1, num_batches_in_epoch, loss_mse.item()))
+                if i < num_batches_in_epoch - 1:
+                    print("   - epoch {}/{}, batch {}/{:.1f}: MSE loss {}"
+                          .format(epoch + 1, self.num_epochs, i + 1, num_batches_in_epoch, loss_mse.item()))
                 if loss_mse.item() < best_loss:
                     best_loss = loss_mse.item()
                     best_epoch = epoch
