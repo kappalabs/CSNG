@@ -10,8 +10,8 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 
 # Decide which device we want to run on
-# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 print('device', device)
 
 
@@ -229,7 +229,7 @@ class LinearNetworkModel:
 
         best_loss = float("inf")
         if os.path.isfile(self.model_filepath):
-            checkpoint = torch.load(self.model_filepath)
+            checkpoint = torch.load(self.model_filepath, map_location=device)
             best_loss = checkpoint['best_loss']
             print("Loaded network with best loss {}, epoch {}".format(best_loss, checkpoint['epoch']))
             self.model.load_state_dict(checkpoint['network'])
