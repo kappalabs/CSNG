@@ -58,9 +58,9 @@ class LinearRegressionModel:
             raise Exception("Model not trained")
 
         weights = self.lr_model.coef_
-        biases = self.lr_model.singular_
+        biases = np.zeros((110, 110))
 
         weights = np.reshape(weights, (-1, 51, 51))
-        biases = np.reshape(biases, (51, 51))
+        biases = np.reshape(biases, (110, 110))
 
         return weights, biases
