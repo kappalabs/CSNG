@@ -1,6 +1,4 @@
 import os
-from typing import Tuple
-
 import torch
 import torch.utils.data
 
@@ -9,6 +7,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 
+from typing import Tuple
+from lgn_deconvolve.lgn_data import LGNDataset
+
 # Decide which device we want to run on
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #device = torch.device("cpu")
@@ -16,72 +17,6 @@ print('device', device)
 
 
 class ConvolutionalNetworkModel:
-
-    class LGNDataset(torch.utils.data.Dataset):
-
-        def __init__(self, response, stimuli, datanorm):
-            self.num_samples = response.shape[0]
-
-            self.stimulus_dataset = stimuli
-            self.response_dataset = response
-
-            self.response_offsets = 0
-            self.response_stds = 1
-            self.stimulus_offsets = 0
-            self.stimulus_stds = 1
-
-            self.datanorm = datanorm
-
-            self.load_data()
-
-        def load_data(self):
-            if self.response_dataset is not None:
-                shmi, shma, shme, shstd = self.response_dataset.min(), self.response_dataset.max(), \
-                                          self.response_dataset.mean(), self.response_dataset.std()
-                print(" - responses raw description:", shmi, shma, shme, shstd)
-
-                self.response_offsets = self.response_dataset.mean(axis=0)
-                self.response_stds = self.response_dataset.std(axis=0)
-
-                self.num_samples = np.shape(self.response_dataset)[0]
-
-            if self.stimulus_dataset is not None:
-                shmi, shma, shme, shstd = self.stimulus_dataset.min(), self.stimulus_dataset.max(), \
-                                          self.stimulus_dataset.mean(), self.stimulus_dataset.std()
-                print(" - stimuli raw description:", shmi, shma, shme, shstd)
-
-                self.stimulus_offsets = self.stimulus_dataset.mean(axis=0)
-                self.stimulus_stds = self.stimulus_dataset.std(axis=0)
-
-                self.num_samples = np.shape(self.stimulus_dataset)[0]
-
-        def __len__(self):
-            return self.num_samples
-
-        def __getitem__(self, idx):
-            response = torch.zeros((1, ))
-            response_raw = torch.zeros((1, ))
-            if self.response_dataset is not None:
-                response_raw = self.response_dataset[idx]
-
-                if self.datanorm is None:
-                    response = transforms.ToTensor()(response_raw)
-                elif self.datanorm == "mean0":
-                    response = transforms.ToTensor()(response_raw - self.response_offsets)
-                elif self.datanorm == "mean0_std1":
-                    response = transforms.ToTensor()(response_raw - self.response_offsets) / self.response_stds
-
-            stimulus = torch.zeros((1, ))
-            stimulus_raw = torch.zeros((1, ))
-            if self.stimulus_dataset is not None:
-                stimulus_raw = self.stimulus_dataset[idx]
-
-                stimulus = transforms.ToTensor()(stimulus_raw)
-                # stimulus = transforms.ToTensor()(stimulus_raw - self.stimulus_offsets)
-                # stimulus = transforms.ToTensor()(stimulus_raw - self.stimulus_offsets) / self.stimulus_stds
-
-            return {"stimulus": stimulus, "response": response,
-                    "response_raw": response_raw, "stimulus_raw": stimulus_raw}
 
     class NNModel(nn.Module):
 
@@ -100,7 +35,7 @@ class ConvolutionalNetworkModel:
 
             return out_img
 
-    def __init__(self, subfolder: str, init_zeros=False, use_crop=False, init_kernel=None, use_bias=False, datanorm=None):
+    def __init__(self, subfolder: str, init_zeros=False, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, filters=1):
         self.stimuli_shape = None
         self.response_shape = None
         self.init_zeros = init_zeros
@@ -108,6 +43,7 @@ class ConvolutionalNetworkModel:
         self.init_kernel = init_kernel
         self.use_bias = use_bias
         self.datanorm = datanorm
+        self.filters = filters
 
         self.learning_rate = 0.0001
         self.num_epochs = 50
@@ -140,6 +76,9 @@ class ConvolutionalNetworkModel:
         else:
             name += "_initrnd"
 
+        if self.filters > 1:
+            name += "_filters{}".format(self.filters)
+
         return name
 
     def _init_zeros(self):
@@ -159,7 +98,7 @@ class ConvolutionalNetworkModel:
 
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
-            ConvolutionalNetworkModel.LGNDataset(response, stimuli, self.datanorm),
+            LGNDataset(response, stimuli, self.datanorm),
             batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_trn.dataset), "samples")
         num_samples = len(dataloader_trn.dataset)
@@ -222,7 +161,7 @@ class ConvolutionalNetworkModel:
 
     def load(self, stimuli_shape, response_shape):
         # Define the network
-        self.model = ConvolutionalNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias)
+        self.model = ConvolutionalNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias, self.filters)
         self.model.to(device)
 
         if self.init_zeros:
@@ -268,12 +207,11 @@ class ConvolutionalNetworkModel:
             raise Exception("Model not trained")
 
         self.model.eval()
-        batch_size = 512
 
         # Create the dataloader
         dataloader_tst = torch.utils.data.DataLoader(
-            ConvolutionalNetworkModel.LGNDataset(response_np, None, self.datanorm),
-            batch_size=batch_size, shuffle=False, num_workers=self.num_workers)
+            LGNDataset(response_np, None, self.datanorm),
+            batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_tst.dataset), "samples")
 
         # For each batch in the dataloader

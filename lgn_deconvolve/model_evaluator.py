@@ -56,6 +56,7 @@ class ModelEvaluator:
         CROP_SIZE = 64
         transform_crop = transforms.Compose([
             transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
+            # CentralPxCropTransform(),
         ])
 
         # Compute the losses

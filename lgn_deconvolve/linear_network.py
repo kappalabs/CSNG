@@ -1,6 +1,4 @@
 import os
-from typing import Tuple
-
 import torch
 import torch.utils.data
 
@@ -9,6 +7,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 
+from typing import Tuple
+from lgn_deconvolve.lgn_data import LGNDataset
+
 # Decide which device we want to run on
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
@@ -16,67 +17,6 @@ print('device', device)
 
 
 class LinearNetworkModel:
-
-    class LGNDataset(torch.utils.data.Dataset):
-
-        def __init__(self, response, stimuli):
-            self.num_samples = response.shape[0]
-
-            self.stimulus_dataset = stimuli
-            self.response_dataset = response
-
-            self.response_offsets = 0
-            self.response_stds = 1
-            self.stimulus_offsets = 0
-            self.stimulus_stds = 1
-
-            self.load_data()
-
-        def load_data(self):
-            if self.response_dataset is not None:
-                shmi, shma, shme, shstd = self.response_dataset.min(), self.response_dataset.max(), \
-                                          self.response_dataset.mean(), self.response_dataset.std()
-                print(" - responses raw description:", shmi, shma, shme, shstd)
-
-                self.response_offsets = self.response_dataset.mean(axis=0)
-                self.response_stds = self.response_dataset.std(axis=0)
-
-                self.num_samples = np.shape(self.response_dataset)[0]
-
-            if self.stimulus_dataset is not None:
-                shmi, shma, shme, shstd = self.stimulus_dataset.min(), self.stimulus_dataset.max(), \
-                                          self.stimulus_dataset.mean(), self.stimulus_dataset.std()
-                print(" - stimuli raw description:", shmi, shma, shme, shstd)
-
-                self.stimulus_offsets = self.stimulus_dataset.mean(axis=0)
-                self.stimulus_stds = self.stimulus_dataset.std(axis=0)
-
-                self.num_samples = np.shape(self.stimulus_dataset)[0]
-
-        def __len__(self):
-            return self.num_samples
-
-        def __getitem__(self, idx):
-            response = torch.zeros((1, ))
-            response_raw = torch.zeros((1, ))
-            if self.response_dataset is not None:
-                response_raw = self.response_dataset[idx]
-
-                response = transforms.ToTensor()(response_raw)
-                # response = transforms.ToTensor()(response_raw - self.response_offsets)
-                # response = transforms.ToTensor()(response_raw - self.response_offsets) / self.response_stds
-
-            stimulus = torch.zeros((1, ))
-            stimulus_raw = torch.zeros((1, ))
-            if self.stimulus_dataset is not None:
-                stimulus_raw = self.stimulus_dataset[idx]
-
-                stimulus = transforms.ToTensor()(stimulus_raw)
-                # stimulus = transforms.ToTensor()(stimulus_raw - self.stimulus_offsets)
-                # stimulus = transforms.ToTensor()(stimulus_raw - self.stimulus_offsets) / self.stimulus_stds
-
-            return {"stimulus": stimulus, "response": response,
-                    "response_raw": response_raw, "stimulus_raw": stimulus_raw}
 
     class NNModel(nn.Module):
 
@@ -126,7 +66,7 @@ class LinearNetworkModel:
         if self.datanorm is None:
             name += "_nodatanorm"
         else:
-            raise Exception("Unimplemented normalization")
+            name += "_" + self.datanorm
 
         if self.use_crop:
             name += "_crop64x64"
@@ -135,6 +75,9 @@ class LinearNetworkModel:
             name += "_init0"
         else:
             name += "_initrnd"
+
+        if self.init_kernel is not None:
+            name += "_initW"
 
         return name
 
@@ -156,7 +99,7 @@ class LinearNetworkModel:
 
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
-            LinearNetworkModel.LGNDataset(response, stimuli),
+            LGNDataset(response, stimuli, self.datanorm),
             batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_trn.dataset), "samples")
         num_samples = len(dataloader_trn.dataset)
@@ -174,6 +117,7 @@ class LinearNetworkModel:
             CROP_SIZE = 64
             transform_crop = transforms.Compose([
                 transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
+                # CentralPxCropTransform(),
             ])
 
         print("Starting Training Loop...")
@@ -268,7 +212,7 @@ class LinearNetworkModel:
 
         # Create the dataloader
         dataloader_tst = torch.utils.data.DataLoader(
-            LinearNetworkModel.LGNDataset(response_np, None),
+            LGNDataset(response_np, None, self.datanorm),
             batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_tst.dataset), "samples")
 
