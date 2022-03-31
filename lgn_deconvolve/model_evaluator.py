@@ -108,14 +108,14 @@ class ModelEvaluator:
         os.makedirs(predictions_dir, exist_ok=True)
         print("predictions_dir", predictions_dir)
 
-        gold_stimuli = data.stimuli_dataset_test
-        gold_responses = data.response_dataset_test
+        gold_stimuli = data.stimuli_dataset_test[:num_save]
+        gold_responses = data.response_dataset_test[:num_save]
 
         criterion_mse = nn.MSELoss(reduction='none')
         criterion_l1 = nn.L1Loss(reduction='none')
 
         weights = np.reshape(weights, (-1, 51 * 51))
-        for response_idx, gold_response in enumerate(gold_responses[:num_save]):
+        for response_idx, gold_response in enumerate(gold_responses):
             gold_response = np.reshape(gold_response, (51 * 51, 1))
             prediction = weights @ gold_response
             prediction = np.reshape(prediction, (110, 110)) + biases
@@ -158,11 +158,67 @@ class ModelEvaluator:
             plt.savefig(out_file)
             plt.close()
 
+    @staticmethod
+    def save_outputs(predictions_dir, name_prefix, data, model, num_save=16):
+        os.makedirs(predictions_dir, exist_ok=True)
+        print("predictions_dir", predictions_dir)
+
+        gold_stimuli = data.stimuli_dataset_test[:num_save]
+        gold_responses = data.response_dataset_test[:num_save]
+
+        # Compute the predictions on testing dataset
+        print("Computing predictions...")
+        predictions_stimuli = model.predict(gold_responses)
+        print(" - computed the predictions on {} samples".format(data.num_test_data))
+
+        criterion_mse = nn.MSELoss(reduction='none')
+        criterion_l1 = nn.L1Loss(reduction='none')
+
+        for response_idx, prediction_stimuli in enumerate(predictions_stimuli):
+            prediction_stimuli = np.squeeze(prediction_stimuli)
+            out_file = os.path.join(predictions_dir, "{}_{}".format(name_prefix, response_idx))
+
+            fig, axs = plt.subplots(2, 2)
+            fig.tight_layout()
+
+            # Plot stimuli
+            ax = axs[0, 0]
+            ax.title.set_text("Stimuli")
+            im = ax.imshow(gold_stimuli[response_idx])
+            plt.colorbar(im, ax=ax)
+
+            # Plot the model prediction
+            ax = axs[1, 0]
+            ax.title.set_text("Prediction")
+            im = ax.imshow(prediction_stimuli)
+            plt.colorbar(im, ax=ax)
+
+            gold_stimuli_torch = torch.from_numpy(gold_stimuli[response_idx]).squeeze()
+            prediction_torch = torch.from_numpy(prediction_stimuli).squeeze()
+
+            loss_mse = criterion_mse(gold_stimuli_torch, prediction_torch)
+            loss_l1 = criterion_l1(gold_stimuli_torch, prediction_torch)
+
+            # Plot L1 loss
+            ax = axs[0, 1]
+            ax.title.set_text("Loss L1")
+            im = ax.imshow(loss_l1)
+            plt.colorbar(im, ax=ax)
+
+            # Plot MSE loss
+            ax = axs[1, 1]
+            ax.title.set_text("Loss MSE")
+            im = ax.imshow(loss_mse)
+            plt.colorbar(im, ax=ax)
+
+            plt.savefig(out_file)
+            plt.close()
+
 
 def main():
     data = LGNData()
 
-    for percent_part_100 in range(10, 20, 10):
+    for percent_part_100 in range(70, 80, 10):
         # Select part of the training set to train on
         percent_part = percent_part_100 / 100.
         train_samples = int(percent_part * data.num_train_data)
@@ -187,6 +243,7 @@ def main():
         w, b = lrm.get_kernel()
         ModelEvaluator.save_filters(os.path.join(lrm.model_path), "deconv_filter", w, b)
         ModelEvaluator.manual_output(os.path.join(lrm.model_path), "prediction", w, b, data)
+        ModelEvaluator.save_outputs(os.path.join(lrm.model_path), "prediction_sklearn", data, lrm, num_save=16)
 
         print("-------------------")
 
@@ -194,12 +251,12 @@ def main():
         # Second model - linear network
 
         # Train second model
-        # lnm = LinearNetworkModel(percent_subfolder, init_zeros=True, use_crop=False)
-        lnm = LinearNetworkModel(percent_subfolder, init_zeros=True, use_crop=True)
+        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=False, init_zeros=True)
+        lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_zeros=True)
         # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
         # lnm = LinearNetworkModel(model_name, init_zeros=True, use_crop=True, init_kernel=w)
         print("Training the LN model", lnm.model_name)
-        lnm.train(train_stimuli_subset, train_response_subset, continue_training=True)
+        lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
         # Evaluate the model
         print("Evaluating LN (#train {}) model".format(train_samples))
@@ -210,6 +267,7 @@ def main():
         lnm_time_dir = os.path.join(lnm.model_path, "{}".format(time.time_ns()))
         ModelEvaluator.save_filters(lnm_time_dir, "deconv_filter", w, b)
         ModelEvaluator.manual_output(lnm_time_dir, "prediction", w, b, data)
+        ModelEvaluator.save_outputs(lnm_time_dir, "prediction_torch", data, lnm, num_save=16)
 
         print("-------------------")
 
@@ -217,9 +275,13 @@ def main():
         # Third model - convolutional network
 
         # Train second model
-        cnm = ConvolutionalNetworkModel(percent_subfolder, init_zeros=False, use_crop=True)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=True)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=False)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_zeros=True)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_zeros=False)
+        cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=False, init_zeros=True)
         print("Training the CN model", cnm.model_name)
-        cnm.train(train_stimuli_subset, train_response_subset, continue_training=True)
+        cnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
         # Evaluate the model
         print("Evaluating CN (#train {}) model".format(train_samples))
@@ -229,31 +291,9 @@ def main():
         w, b = cnm.get_kernel()
         cnm_time_dir = os.path.join(cnm.model_path, "{}".format(time.time_ns()))
         ModelEvaluator.save_filters(cnm_time_dir, "deconv_filter_", w, b)
-        # ModelEvaluator.manual_output(cnm_time_dir, "prediction", w, b, data)
+        ModelEvaluator.save_outputs(cnm_time_dir, "prediction_torch", data, cnm, num_save=16)
 
         print("-------------------")
-
-        # #
-        # # Third model - linear network zeroed
-        #
-        # # Train second model
-        # model_name = "linear_network_zeroed_model_{}%".format(int(percent_part * 100))
-        # lnm = LinearNetworkModel(model_name, init_zeros=True)
-        # print("Training the LN-zero model")
-        # lnm.train(train_stimuli_subset, train_response_subset)
-        # lnm_predictions = lnm.predict(data.response_dataset_test)
-        # print("Computed LN-zero predictions")
-        #
-        # # Evaluate the model
-        # print("Evaluating LN-zero (#train {}) model on {} samples".format(train_samples, data.num_test_data))
-        # loss_ln_l1 = ModelEvaluator.evaluate_l1_whole(data.stimuli_dataset_test, lnm_predictions)
-        # print(loss_ln_l1.mean().item())
-        #
-        # # Save the filters
-        # w, b = lnm.get_kernel()
-        # ModelEvaluator.save_filters("{}_LN-zero".format(time.time()), "deconv_filter_LN_", w, b)
-        #
-        # print("-------------------")
 
         print("\n===================")
 

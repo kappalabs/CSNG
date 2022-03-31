@@ -10,7 +10,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 
 # Decide which device we want to run on
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 print('device', device)
 
@@ -38,7 +38,7 @@ class LinearNetworkModel:
                                           self.response_dataset.mean(), self.response_dataset.std()
                 print(" - responses raw description:", shmi, shma, shme, shstd)
 
-                self.response_offsets = -self.response_dataset.mean(axis=0)
+                self.response_offsets = self.response_dataset.mean(axis=0)
                 self.response_stds = self.response_dataset.std(axis=0)
 
                 self.num_samples = np.shape(self.response_dataset)[0]
@@ -48,7 +48,7 @@ class LinearNetworkModel:
                                           self.stimulus_dataset.mean(), self.stimulus_dataset.std()
                 print(" - stimuli raw description:", shmi, shma, shme, shstd)
 
-                self.stimulus_offsets = -self.stimulus_dataset.mean(axis=0)
+                self.stimulus_offsets = self.stimulus_dataset.mean(axis=0)
                 self.stimulus_stds = self.stimulus_dataset.std(axis=0)
 
                 self.num_samples = np.shape(self.stimulus_dataset)[0]
@@ -63,8 +63,8 @@ class LinearNetworkModel:
                 response_raw = self.response_dataset[idx]
 
                 response = transforms.ToTensor()(response_raw)
-                # response = transforms.ToTensor()(response_raw + self.response_offsets)
-                # response = transforms.ToTensor()(response_raw + self.response_offsets) / self.response_stds
+                # response = transforms.ToTensor()(response_raw - self.response_offsets)
+                # response = transforms.ToTensor()(response_raw - self.response_offsets) / self.response_stds
 
             stimulus = torch.zeros((1, ))
             stimulus_raw = torch.zeros((1, ))
@@ -72,8 +72,8 @@ class LinearNetworkModel:
                 stimulus_raw = self.stimulus_dataset[idx]
 
                 stimulus = transforms.ToTensor()(stimulus_raw)
-                # stimulus = transforms.ToTensor()(stimulus_raw + self.stimulus_offsets)
-                # stimulus = transforms.ToTensor()(stimulus_raw + self.stimulus_offsets) / self.stimulus_stds
+                # stimulus = transforms.ToTensor()(stimulus_raw - self.stimulus_offsets)
+                # stimulus = transforms.ToTensor()(stimulus_raw - self.stimulus_offsets) / self.stimulus_stds
 
             return {"stimulus": stimulus, "response": response,
                     "response_raw": response_raw, "stimulus_raw": stimulus_raw}
