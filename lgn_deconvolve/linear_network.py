@@ -36,10 +36,10 @@ class LinearNetworkModel:
 
             return out_img
 
-    def __init__(self, subfolder: str, init_zeros=False, use_crop=False, init_kernel=None, use_bias=False, datanorm=None):
+    def __init__(self, subfolder: str, init_value=None, use_crop=False, init_kernel=None, use_bias=False, datanorm=None):
         self.stimuli_shape = None
         self.response_shape = None
-        self.init_zeros = init_zeros
+        self.init_value = init_value
         self.use_crop = use_crop
         self.init_kernel = init_kernel
         self.use_bias = use_bias
@@ -71,8 +71,8 @@ class LinearNetworkModel:
         if self.use_crop:
             name += "_crop64x64"
 
-        if self.init_zeros:
-            name += "_init0"
+        if self.init_value is not None:
+            name += "_init{}".format(self.init_value)
         else:
             name += "_initrnd"
 
@@ -81,10 +81,10 @@ class LinearNetworkModel:
 
         return name
 
-    def _init_zeros(self):
-        nn.init.zeros_(self.model.fc1.weight.data)
+    def _init_value(self, value):
+        nn.init.constant_(self.model.fc1.weight.data, value)
         if self.model.fc1.bias is not None:
-            nn.init.zeros_(self.model.fc1.bias.data)
+            nn.init.constant_(self.model.fc1.bias.data, value)
 
     def _init_kernel(self, kernel):
         kernel = np.reshape(kernel, (110*110, 51*51))
@@ -166,8 +166,8 @@ class LinearNetworkModel:
         self.model = LinearNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias)
         self.model.to(device)
 
-        if self.init_zeros:
-            self._init_zeros()
+        if self.init_value is not None:
+            self._init_value(self.init_value)
         if self.init_kernel is not None:
             self._init_kernel(self.init_kernel)
 
