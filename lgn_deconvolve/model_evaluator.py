@@ -181,9 +181,19 @@ class ModelEvaluator:
         criterion_mse = nn.MSELoss(reduction='none')
         criterion_l1 = nn.L1Loss(reduction='none')
 
+        CROP_SIZE = 64
+        transform_crop = transforms.Compose([
+            transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
+        ])
+
         for response_idx, prediction_stimuli in enumerate(predictions_stimuli):
             prediction_stimuli = np.squeeze(prediction_stimuli)
             out_file = os.path.join(predictions_dir, "{}_{}".format(name_prefix, response_idx))
+
+            gold_stimulus_torch = torch.from_numpy(gold_stimuli[response_idx]).squeeze()
+            gold_stimulus_torch_crop = transform_crop(gold_stimulus_torch)
+            prediction_stimuli_torch = torch.from_numpy(prediction_stimuli).squeeze()
+            prediction_stimuli_torch_crop = transform_crop(prediction_stimuli_torch)
 
             fig, axs = plt.subplots(2, 2)
             fig.tight_layout()
@@ -191,20 +201,17 @@ class ModelEvaluator:
             # Plot stimuli
             ax = axs[0, 0]
             ax.title.set_text("Stimuli")
-            im = ax.imshow(gold_stimuli[response_idx])
+            im = ax.imshow(gold_stimulus_torch_crop)
             plt.colorbar(im, ax=ax)
 
             # Plot the model prediction
             ax = axs[1, 0]
             ax.title.set_text("Prediction")
-            im = ax.imshow(prediction_stimuli)
+            im = ax.imshow(prediction_stimuli_torch_crop)
             plt.colorbar(im, ax=ax)
 
-            gold_stimuli_torch = torch.from_numpy(gold_stimuli[response_idx]).squeeze()
-            prediction_torch = torch.from_numpy(prediction_stimuli).squeeze()
-
-            loss_mse = criterion_mse(gold_stimuli_torch, prediction_torch)
-            loss_l1 = criterion_l1(gold_stimuli_torch, prediction_torch)
+            loss_mse = criterion_mse(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
+            loss_l1 = criterion_l1(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
 
             # Plot L1 loss
             ax = axs[0, 1]
@@ -301,7 +308,7 @@ def main():
         # Save the filters
         w, b = lrm.get_kernel()
         ModelEvaluator.save_filters(os.path.join(lrm.model_path), "deconv_filter", w, b)
-        ModelEvaluator.manual_output(os.path.join(lrm.model_path), "prediction", w, b, data)
+        # ModelEvaluator.manual_output(os.path.join(lrm.model_path), "prediction", w, b, data)
         ModelEvaluator.save_outputs(os.path.join(lrm.model_path), "prediction_sklearn", data, lrm, num_save=16)
         ModelEvaluator.plot_linear_model_dependencies(os.path.join(lrm.model_path), "dependency", data, lrm, num_save=16)
 
@@ -327,7 +334,7 @@ def main():
         w, b = lnm.get_kernel()
         lnm_time_dir = os.path.join(lnm.model_path, "{}".format(time.time_ns()))
         ModelEvaluator.save_filters(lnm_time_dir, "deconv_filter", w, b)
-        ModelEvaluator.manual_output(lnm_time_dir, "prediction", w, b, data)
+        # ModelEvaluator.manual_output(lnm_time_dir, "prediction", w, b, data)
         ModelEvaluator.save_outputs(lnm_time_dir, "prediction_torch", data, lnm, num_save=16)
         ModelEvaluator.plot_linear_model_dependencies(lnm_time_dir, "dependency", data, lnm, num_save=16)
 
