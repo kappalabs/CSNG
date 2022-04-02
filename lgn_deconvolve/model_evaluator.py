@@ -215,6 +215,54 @@ class ModelEvaluator:
             plt.savefig(out_file)
             plt.close()
 
+    @staticmethod
+    def plot_linear_model_dependencies(predictions_dir, name_prefix, data: LGNData, linear_model, num_save=16):
+        np.random.seed(42)
+
+        os.makedirs(predictions_dir, exist_ok=True)
+        print("predictions_dir", predictions_dir)
+
+        # choice_indices = np.random.choice(range(data.num_test_data), num_save, replace=False)
+
+        gold_stimuli = data.stimuli_dataset_test
+        gold_responses = data.response_dataset_test
+
+        # Get weights (& biases) for the linear model
+        w, b = linear_model.get_kernel()
+        criterion_mse = nn.MSELoss()
+
+        # pro nekolik pozic
+        for _ in range(num_save):
+            # Select point in the central 64x64 area of stimuli
+            stimuli_pos = np.random.choice(64, 2, replace=False) + 23
+            response_pos = np.random.choice(51, 2, replace=False)
+
+            X = gold_responses[:, response_pos[0], response_pos[1]]
+            y = gold_stimuli[:, stimuli_pos[0], stimuli_pos[1]]
+
+            weight = w[stimuli_pos[0] * stimuli_pos[1], response_pos[0], response_pos[1]]
+            gold_stimuli_torch = torch.from_numpy(y).squeeze()
+            prediction_torch = torch.from_numpy(X * weight).squeeze()
+
+            loss_mse = criterion_mse(gold_stimuli_torch, prediction_torch)
+
+            out_file = os.path.join(predictions_dir,
+                                    "{}_{}_s{}_r{}".format(name_prefix, num_save, stimuli_pos, response_pos))
+
+            plt.figure(figsize=(10, 10))
+
+            # vykresli scatter pro konkretni (pixel v response)-(pixel v stimuli) + vahu/regresni primku
+            plt.title("Stimuli {}, response {}, MSE={}, weight={}"
+                      .format(stimuli_pos, response_pos, loss_mse.item(), weight))
+            plt.scatter(X, y, s=0.1)
+            tan = w[stimuli_pos[0] * stimuli_pos[1], response_pos[0], response_pos[1]]
+            plt.plot(X, X * tan)
+            plt.ylim(min(y), max(y))
+            plt.xlabel("Response px")
+            plt.ylabel("Stimuli px")
+            plt.savefig(out_file)
+            plt.close()
+
 
 def main():
     data = LGNData()
@@ -245,6 +293,7 @@ def main():
         ModelEvaluator.save_filters(os.path.join(lrm.model_path), "deconv_filter", w, b)
         ModelEvaluator.manual_output(os.path.join(lrm.model_path), "prediction", w, b, data)
         ModelEvaluator.save_outputs(os.path.join(lrm.model_path), "prediction_sklearn", data, lrm, num_save=16)
+        ModelEvaluator.plot_linear_model_dependencies(os.path.join(lrm.model_path), "dependency", data, lrm, num_save=16)
 
         print("-------------------")
 
@@ -252,10 +301,11 @@ def main():
         # Second model - linear network
 
         # Train second model
-        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=False, init_zeros=True)
-        lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_zeros=True)
+        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=False, init_value=0)
+        lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_value=0)
+        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_value=100)
         # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
-        # lnm = LinearNetworkModel(model_name, init_zeros=True, use_crop=True, init_kernel=w)
+        # lnm = LinearNetworkModel(model_name, init_value=0, use_crop=True, init_kernel=w)
         print("Training the LN model", lnm.model_name)
         lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
@@ -269,6 +319,7 @@ def main():
         ModelEvaluator.save_filters(lnm_time_dir, "deconv_filter", w, b)
         ModelEvaluator.manual_output(lnm_time_dir, "prediction", w, b, data)
         ModelEvaluator.save_outputs(lnm_time_dir, "prediction_torch", data, lnm, num_save=16)
+        ModelEvaluator.plot_linear_model_dependencies(lnm_time_dir, "dependency", data, lnm, num_save=16)
 
         print("-------------------")
 

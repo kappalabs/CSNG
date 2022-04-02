@@ -11,8 +11,8 @@ from typing import Tuple
 from lgn_deconvolve.lgn_data import LGNDataset
 
 # Decide which device we want to run on
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
+# device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 print('device', device)
 
 
