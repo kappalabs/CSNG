@@ -13,6 +13,12 @@ from lgn_deconvolve.linear_regression import LinearRegressionModel
 from lgn_deconvolve.convolution_network import ConvolutionalNetworkModel
 
 
+# Decide which device we want to run on
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
+print('device', device)
+
+
 class ModelEvaluator:
 
     @staticmethod
@@ -265,7 +271,9 @@ class ModelEvaluator:
 
 
 def main():
-    data = LGNData()
+    datanorm=""
+    # datanorm="mean0_std1"
+    data = LGNData(datanorm=datanorm)
 
     for percent_part_100 in range(70, 80, 10):
         # Select part of the training set to train on
@@ -275,6 +283,8 @@ def main():
         train_stimuli_subset = data.stimuli_dataset_train[:train_samples]
         train_response_subset = data.response_dataset_train[:train_samples]
         percent_subfolder = "{}%".format(int(percent_part * 100))
+        if datanorm != "":
+            percent_subfolder += "_{}".format(datanorm)
 
         #
         # First model - linear regression
@@ -301,11 +311,11 @@ def main():
         # Second model - linear network
 
         # Train second model
-        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=False, init_value=0)
-        lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_value=0)
-        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_value=100)
+        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=False, init_value=0)
+        lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0)
+        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=100)
         # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
-        # lnm = LinearNetworkModel(model_name, init_value=0, use_crop=True, init_kernel=w)
+        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, init_kernel=w)
         print("Training the LN model", lnm.model_name)
         lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
@@ -327,11 +337,12 @@ def main():
         # Third model - convolutional network
 
         # Train second model
-        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=True)
-        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=False)
-        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_zeros=True)
-        # cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_zeros=False)
-        cnm = ConvolutionalNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=False, init_zeros=True)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=True)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=False)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_zeros=True)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_zeros=False)
+        # cnm = ConvolutionalNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=False, init_zeros=True)
+        cnm = ConvolutionalNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm="mean0_std1", use_crop=True, init_zeros=True, filters=2)
         print("Training the CN model", cnm.model_name)
         cnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
@@ -340,9 +351,9 @@ def main():
         ModelEvaluator.evaluate(data, cnm)
 
         # Save the filters
-        w, b = cnm.get_kernel()
+        # w, b = cnm.get_kernel()
         cnm_time_dir = os.path.join(cnm.model_path, "{}".format(time.time_ns()))
-        ModelEvaluator.save_filters(cnm_time_dir, "deconv_filter_", w, b)
+        # ModelEvaluator.save_filters(cnm_time_dir, "deconv_filter_", w, b)
         ModelEvaluator.save_outputs(cnm_time_dir, "prediction_torch", data, cnm, num_save=16)
 
         print("-------------------")

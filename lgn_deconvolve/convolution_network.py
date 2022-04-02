@@ -10,11 +10,6 @@ import torchvision.transforms as transforms
 from typing import Tuple
 from lgn_deconvolve.lgn_data import LGNDataset
 
-# Decide which device we want to run on
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-#device = torch.device("cpu")
-print('device', device)
-
 
 class ConvolutionalNetworkModel:
 
@@ -35,7 +30,9 @@ class ConvolutionalNetworkModel:
 
             return out_img
 
-    def __init__(self, subfolder: str, init_zeros=False, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, filters=1):
+    def __init__(self, subfolder: str, device,
+                 init_zeros=False, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, filters=1):
+        self.device = device
         self.stimuli_shape = None
         self.response_shape = None
         self.init_zeros = init_zeros
@@ -88,7 +85,7 @@ class ConvolutionalNetworkModel:
 
     def _init_kernel(self, kernel):
         kernel = np.reshape(kernel, (110*110, 51*51))
-        self.model.deconv.weight.data = torch.from_numpy(kernel).to(device, dtype=torch.float)
+        self.model.deconv.weight.data = torch.from_numpy(kernel).to(self.device, dtype=torch.float)
         if self.model.deconv.bias is not None:
             nn.init.zeros_(self.model.deconv.bias.data)
 
@@ -121,11 +118,11 @@ class ConvolutionalNetworkModel:
         print("Starting Training Loop...")
         # For each epoch
         for epoch in range(self.num_epochs):
-            epoch_mse_loss = torch.zeros((1,)).to(device, dtype=torch.float)
+            epoch_mse_loss = torch.zeros((1,)).to(self.device, dtype=torch.float)
             # For each batch in the dataloader
             for i, data in enumerate(dataloader_trn, 0):
-                data_stimulus = data['stimulus'].to(device, dtype=torch.float)
-                data_response = data['response'].to(device, dtype=torch.float)
+                data_stimulus = data['stimulus'].to(self.device, dtype=torch.float)
+                data_response = data['response'].to(self.device, dtype=torch.float)
 
                 # Prepare the network
                 optimizer.zero_grad()
@@ -162,7 +159,7 @@ class ConvolutionalNetworkModel:
     def load(self, stimuli_shape, response_shape):
         # Define the network
         self.model = ConvolutionalNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias, self.filters)
-        self.model.to(device)
+        self.model.to(self.device)
 
         if self.init_zeros:
             self._init_zeros()
@@ -171,7 +168,7 @@ class ConvolutionalNetworkModel:
 
         best_loss = float("inf")
         if os.path.isfile(self.model_filepath):
-            checkpoint = torch.load(self.model_filepath, map_location=device)
+            checkpoint = torch.load(self.model_filepath, map_location=self.device)
             best_loss = checkpoint['best_loss']
             print("Loaded network with best loss {}, epoch {}".format(best_loss, checkpoint['epoch']))
             self.model.load_state_dict(checkpoint['network'])
@@ -211,13 +208,13 @@ class ConvolutionalNetworkModel:
         # Create the dataloader
         dataloader_tst = torch.utils.data.DataLoader(
             LGNDataset(response_np, None, self.datanorm),
-            batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
+            batch_size=512, shuffle=False, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_tst.dataset), "samples")
 
         # For each batch in the dataloader
         predictions = None
         for i, data in enumerate(dataloader_tst, 0):
-            data_response = data['response'].to(device, dtype=torch.float)
+            data_response = data['response'].to(self.device, dtype=torch.float)
 
             prediction = self.model(data_response).detach().cpu().numpy()
             if predictions is None:

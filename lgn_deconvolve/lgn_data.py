@@ -10,7 +10,7 @@ import torchvision.transforms.functional as TF
 
 class LGNData:
 
-    def __init__(self, train_part=0.8):
+    def __init__(self, train_part=0.8, datanorm=None):
         # Load the dataset from pickle file
         data_dir = os.path.join("..", "datasets")
         neuron_position_file = \
@@ -28,9 +28,29 @@ class LGNData:
         self.stimuli_dataset_train = self.dataset['stim'][:self.num_train_data]  # 110 x 110
         self.response_dataset_train = self.dataset['resp'][:self.num_train_data]  # 51 x 51
 
+        # Stimuli: compute offsets & standard deviations
+        self.stimuli_offsets = np.mean(self.stimuli_dataset_train, axis=0)
+        self.stimuli_stds = np.std(self.stimuli_dataset_train, axis=0)
+
+        # Responses: compute offsets & standard deviations
+        self.response_offsets = np.mean(self.response_dataset_train, axis=0)
+        self.response_stds = np.std(self.response_dataset_train, axis=0)
+
         # Testing data
         self.stimuli_dataset_test = self.dataset['stim'][self.num_train_data:]
         self.response_dataset_test = self.dataset['resp'][self.num_train_data:]
+
+        if datanorm == 'mean0_std1':
+            self.stimuli_dataset_train -= self.stimuli_offsets
+            self.stimuli_dataset_train /= self.stimuli_stds
+            self.response_dataset_train -= self.response_stds
+            self.response_dataset_train /= self.response_stds
+
+            # Testing data
+            self.stimuli_dataset_test -= self.stimuli_offsets
+            self.stimuli_dataset_test /= self.stimuli_stds
+            self.response_dataset_test -= self.response_stds
+            self.response_dataset_test /= self.response_stds
 
         self.stimuli_shape = self.stimuli_dataset_train[0].shape
         self.response_shape = self.response_dataset_train[0].shape
