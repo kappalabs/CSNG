@@ -15,7 +15,7 @@ class LinearNetworkModel:
 
     class NNModel(nn.Module):
 
-        def __init__(self, stimuli_shape, response_shape, use_bias, dropout):
+        def __init__(self, stimuli_shape, response_shape, use_bias, dropout, activation=None):
             super(LinearNetworkModel.NNModel, self).__init__()
 
             self.stimuli_shape = stimuli_shape
@@ -24,18 +24,24 @@ class LinearNetworkModel:
             self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1],
                                  bias=use_bias)
             self.dropout = nn.Dropout(p=dropout)
+            if activation is not None:
+                if activation == 'tanh':
+                    self.activation = nn.Tanh()
 
         def forward(self, x):
             x = nn.Flatten()(x)
-            x = self.dropout(x)
 
-            out_img = self.fc1(x).view(x.size(0), 1, *self.stimuli_shape)
+            x = self.fc1(x)
+            x = self.dropout(x)
+            if self.activation is not None:
+                x = self.activation(x)
+            out_img = x.view(x.size(0), 1, *self.stimuli_shape)
 
             return out_img
 
     def __init__(self, subfolder: str, device,
                  init_value=None, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, optimizer=None,
-                 dropout=0):
+                 dropout=0, activation=None):
         self.device = device
         self.stimuli_shape = None
         self.response_shape = None
@@ -46,6 +52,7 @@ class LinearNetworkModel:
         self.datanorm = datanorm
         self.optimizer = optimizer
         self.dropout = dropout
+        self.activation = activation
 
         self.learning_rate = 0.2
         self.num_epochs = 50
@@ -86,6 +93,9 @@ class LinearNetworkModel:
 
         if self.dropout > 0:
             name += "_dropout{}".format(self.dropout)
+
+        if self.activation is not None:
+            name += "_activation{}".format(self.activation)
 
         return name
 
@@ -175,7 +185,8 @@ class LinearNetworkModel:
 
     def load(self, stimuli_shape, response_shape):
         # Define the network
-        self.model = LinearNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias, self.dropout)
+        self.model = LinearNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias, self.dropout,
+                                                self.activation)
         self.model.to(self.device)
 
         if self.init_value is not None:
