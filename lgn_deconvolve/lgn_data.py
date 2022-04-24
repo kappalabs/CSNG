@@ -43,13 +43,13 @@ class LGNData:
         if datanorm == 'mean0_std1':
             self.stimuli_dataset_train -= self.stimuli_offsets
             self.stimuli_dataset_train /= self.stimuli_stds
-            self.response_dataset_train -= self.response_stds
+            self.response_dataset_train -= self.response_offsets
             self.response_dataset_train /= self.response_stds
 
             # Testing data
             self.stimuli_dataset_test -= self.stimuli_offsets
             self.stimuli_dataset_test /= self.stimuli_stds
-            self.response_dataset_test -= self.response_stds
+            self.response_dataset_test -= self.response_offsets
             self.response_dataset_test /= self.response_stds
 
         self.stimuli_shape = self.stimuli_dataset_train[0].shape
