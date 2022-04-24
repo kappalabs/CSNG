@@ -24,10 +24,7 @@ class LinearNetworkModel:
             self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1],
                                  bias=use_bias)
             self.dropout = nn.Dropout(p=dropout)
-            self.activation = None
-            if activation is not None:
-                if activation == 'tanh':
-                    self.activation = nn.Tanh()
+            self.activation = activation
 
         def forward(self, x):
             x = nn.Flatten()(x)
@@ -35,7 +32,8 @@ class LinearNetworkModel:
             x = self.fc1(x)
             x = self.dropout(x)
             if self.activation is not None:
-                x = self.activation(x)
+                if self.activation == 'tanh':
+                    x = nn.Tanh()(x) * 0.5 + 0.5
             out_img = x.view(x.size(0), 1, *self.stimuli_shape)
 
             return out_img
