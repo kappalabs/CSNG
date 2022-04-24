@@ -15,7 +15,7 @@ class LinearNetworkModel:
 
     class NNModel(nn.Module):
 
-        def __init__(self, stimuli_shape, response_shape, use_bias, dropout, activation=None):
+        def __init__(self, stimuli_shape, response_shape, use_bias, dropout, activation):
             super(LinearNetworkModel.NNModel, self).__init__()
 
             self.stimuli_shape = stimuli_shape
@@ -24,6 +24,7 @@ class LinearNetworkModel:
             self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1],
                                  bias=use_bias)
             self.dropout = nn.Dropout(p=dropout)
+            self.activation = None
             if activation is not None:
                 if activation == 'tanh':
                     self.activation = nn.Tanh()
@@ -54,8 +55,8 @@ class LinearNetworkModel:
         self.dropout = dropout
         self.activation = activation
 
-        self.learning_rate = 0.2
-        self.num_epochs = 50
+        self.learning_rate = 0.4
+        self.num_epochs = 100
         self.batch_size = 512 * 12  # Fits into the GPU (<4GB)
         self.batch_size = 35000
         self.num_workers = 8
