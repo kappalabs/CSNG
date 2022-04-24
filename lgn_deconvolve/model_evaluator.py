@@ -203,12 +203,14 @@ class ModelEvaluator:
             ax.title.set_text("Stimuli")
             im = ax.imshow(gold_stimulus_torch_crop)
             plt.colorbar(im, ax=ax)
+            im.set_clim(gold_stimulus_torch_crop.min(), gold_stimulus_torch_crop.max())
 
             # Plot the model prediction
             ax = axs[1, 0]
             ax.title.set_text("Prediction")
             im = ax.imshow(prediction_stimuli_torch_crop)
             plt.colorbar(im, ax=ax)
+            im.set_clim(gold_stimulus_torch_crop.min(), gold_stimulus_torch_crop.max())
 
             loss_mse = criterion_mse(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
             loss_l1 = criterion_l1(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
@@ -278,8 +280,8 @@ class ModelEvaluator:
 
 
 def main():
-    datanorm=""
-    # datanorm="mean0_std1"
+    # datanorm=""
+    datanorm="mean0_std1"
     data = LGNData(datanorm=datanorm)
 
     for percent_part_100 in range(70, 80, 10):
@@ -321,6 +323,7 @@ def main():
         # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=False, init_value=0)
         lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0)
         # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=100)
+        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, dropout=0.5)
         # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
         # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, init_kernel=w)
         print("Training the LN model", lnm.model_name)
@@ -355,7 +358,7 @@ def main():
 
         # Evaluate the model
         print("Evaluating CN (#train {}) model".format(train_samples))
-        ModelEvaluator.evaluate(data, cnm)
+        # ModelEvaluator.evaluate(data, cnm)
 
         # Save the filters
         # w, b = cnm.get_kernel()

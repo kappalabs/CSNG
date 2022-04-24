@@ -15,7 +15,7 @@ class LinearNetworkModel:
 
     class NNModel(nn.Module):
 
-        def __init__(self, stimuli_shape, response_shape, use_bias):
+        def __init__(self, stimuli_shape, response_shape, use_bias, dropout):
             super(LinearNetworkModel.NNModel, self).__init__()
 
             self.stimuli_shape = stimuli_shape
@@ -23,16 +23,18 @@ class LinearNetworkModel:
 
             self.fc1 = nn.Linear(response_shape[0] * response_shape[1], stimuli_shape[0] * stimuli_shape[1],
                                  bias=use_bias)
+            self.dropout = nn.Dropout(p=dropout)
 
         def forward(self, x):
             x = nn.Flatten()(x)
+            x = self.dropout(x)
 
             out_img = self.fc1(x).view(x.size(0), 1, *self.stimuli_shape)
 
             return out_img
 
     def __init__(self, subfolder: str, device,
-                 init_value=None, use_crop=False, init_kernel=None, use_bias=False, datanorm=None):
+                 init_value=None, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, dropout=0):
         self.device = device
         self.stimuli_shape = None
         self.response_shape = None
@@ -41,6 +43,7 @@ class LinearNetworkModel:
         self.init_kernel = init_kernel
         self.use_bias = use_bias
         self.datanorm = datanorm
+        self.dropout = dropout
 
         self.learning_rate = 0.2
         self.num_epochs = 50
@@ -75,6 +78,9 @@ class LinearNetworkModel:
 
         if self.init_kernel is not None:
             name += "_initW"
+
+        if self.dropout > 0:
+            name += "_dropout{}".format(self.dropout)
 
         return name
 
@@ -160,7 +166,7 @@ class LinearNetworkModel:
 
     def load(self, stimuli_shape, response_shape):
         # Define the network
-        self.model = LinearNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias)
+        self.model = LinearNetworkModel.NNModel(stimuli_shape, response_shape, self.use_bias, self.dropout)
         self.model.to(self.device)
 
         if self.init_value is not None:
