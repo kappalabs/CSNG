@@ -108,7 +108,7 @@ class LinearNetworkModel:
         # Create the dataloader
         dataloader_trn = torch.utils.data.DataLoader(
             LGNDataset(response, stimuli, self.datanorm),
-            batch_size=512, shuffle=True, num_workers=self.num_workers)
+            batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_trn.dataset), "samples")
         num_samples = len(dataloader_trn.dataset)
         num_batches_in_epoch = num_samples / self.batch_size
@@ -121,8 +121,9 @@ class LinearNetworkModel:
             optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
         else:
             raise RuntimeError("unknown optimizer")
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=3,
-                                                         cooldown=4, verbose=True)
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=3,
+        #                                                  cooldown=4, verbose=True)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.num_epochs, last_epoch=-1)
 
         transform_crop = None
         if self.use_crop:
@@ -168,8 +169,7 @@ class LinearNetworkModel:
                                                               scheduler.state_dict()))
 
             # Adjust the learning rate
-            if epoch >= 5:
-                scheduler.step(epoch_mse_loss)
+            scheduler.step()
 
         return ln_model, best_loss, best_epoch
 
@@ -225,7 +225,7 @@ class LinearNetworkModel:
         # Create the dataloader
         dataloader_tst = torch.utils.data.DataLoader(
             LGNDataset(response_np, None, self.datanorm),
-            batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
+            batch_size=512, shuffle=False, num_workers=self.num_workers)
         print("Returning loader with", len(dataloader_tst.dataset), "samples")
 
         # For each batch in the dataloader
