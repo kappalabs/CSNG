@@ -34,7 +34,8 @@ class LinearNetworkModel:
             return out_img
 
     def __init__(self, subfolder: str, device,
-                 init_value=None, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, dropout=0):
+                 init_value=None, use_crop=False, init_kernel=None, use_bias=False, datanorm=None, optimizer=None,
+                 dropout=0):
         self.device = device
         self.stimuli_shape = None
         self.response_shape = None
@@ -43,6 +44,7 @@ class LinearNetworkModel:
         self.init_kernel = init_kernel
         self.use_bias = use_bias
         self.datanorm = datanorm
+        self.optimizer = optimizer
         self.dropout = dropout
 
         self.learning_rate = 0.2
@@ -79,6 +81,9 @@ class LinearNetworkModel:
         if self.init_kernel is not None:
             name += "_initW"
 
+        if self.optimizer is not None:
+            name += "_" + self.optimizer
+
         if self.dropout > 0:
             name += "_dropout{}".format(self.dropout)
 
@@ -109,9 +114,13 @@ class LinearNetworkModel:
         num_batches_in_epoch = num_samples / self.batch_size
 
         criterion_mse = nn.MSELoss(reduction='none')
-        # optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
-        optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0, momentum=0.99)
-        # optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
+        if self.optimizer is None:
+            optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0, momentum=0.99)
+            # optimizer = optim.SGD(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
+        elif self.optimizer == 'adam':
+            optimizer = optim.Adam(ln_model.parameters(), lr=self.learning_rate, weight_decay=0)
+        else:
+            raise RuntimeError("unknown optimizer")
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=3,
                                                          cooldown=4, verbose=True)
 

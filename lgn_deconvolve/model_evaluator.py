@@ -326,6 +326,7 @@ def main():
         # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, dropout=0.5)
         # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
         # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, init_kernel=w)
+        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_value=0, optimizer='adam')
         print("Training the LN model", lnm.model_name)
         lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
 
