@@ -54,7 +54,7 @@ class LinearNetworkModel:
         self.activation = activation
 
         self.learning_rate = 0.4
-        self.num_epochs = 100
+        self.num_epochs = 200
         self.batch_size = 512 * 12  # Fits into the GPU (<4GB)
         self.batch_size = 35000
         self.num_workers = 8

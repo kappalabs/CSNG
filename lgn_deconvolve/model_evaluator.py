@@ -316,33 +316,37 @@ def main():
 
         print("-------------------")
 
-        #
-        # Second model - linear network
+        for _ in range(30):
+            #
+            # Second model - linear network
 
-        # Train second model
-        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=False, init_value=0)
-        lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0)
-        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=100)
-        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, dropout=0.5)
-        # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
-        # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, init_kernel=w)
-        # lnm = LinearNetworkModel(percent_subfolder, use_bias=False, datanorm=None, use_crop=True, init_value=0, optimizer='adam')
-        print("Training the LN model", lnm.model_name)
-        lnm.train(train_stimuli_subset, train_response_subset, continue_training=False)
+            # Train second model
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=False, init_value=0)
+            lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0)
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=100)
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, dropout=0.5)
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, dropout=0.5)
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, dropout=0.1, activation='tanh')
+            # NOTE: try to initialize with LR kernel - TEST OK -> same results as LR
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, init_kernel=w)
+            # lnm = LinearNetworkModel(percent_subfolder, device=device, use_bias=False, datanorm=None, use_crop=True, init_value=0, optimizer='adam')
+            print("Training the LN model", lnm.model_name)
+            lnm.train(train_stimuli_subset, train_response_subset, continue_training=True)
 
-        # Evaluate the model
-        print("Evaluating LN (#train {}) model".format(train_samples))
-        ModelEvaluator.evaluate(data, lnm)
+            # Evaluate the model
+            print("Evaluating LN (#train {}) model".format(train_samples))
+            ModelEvaluator.evaluate(data, lnm)
 
-        # Save the filters
-        w, b = lnm.get_kernel()
-        lnm_time_dir = os.path.join(lnm.model_path, "{}".format(time.time_ns()))
-        ModelEvaluator.save_filters(lnm_time_dir, "deconv_filter", w, b)
-        # ModelEvaluator.manual_output(lnm_time_dir, "prediction", w, b, data)
-        ModelEvaluator.save_outputs(lnm_time_dir, "prediction_torch", data, lnm, num_save=16)
-        ModelEvaluator.plot_linear_model_dependencies(lnm_time_dir, "dependency", data, lnm, num_save=16)
+            # Save the filters
+            w, b = lnm.get_kernel()
+            lnm_time_dir = os.path.join(lnm.model_path, "{}".format(time.time_ns()))
+            ModelEvaluator.save_filters(lnm_time_dir, "deconv_filter", w, b)
+            # ModelEvaluator.manual_output(lnm_time_dir, "prediction", w, b, data)
+            ModelEvaluator.save_outputs(lnm_time_dir, "prediction_torch", data, lnm, num_save=16)
+            ModelEvaluator.plot_linear_model_dependencies(lnm_time_dir, "dependency", data, lnm, num_save=16)
 
-        print("-------------------")
+            print("-------------------")
+        exit()
 
         #
         # Third model - convolutional network
