@@ -2,10 +2,10 @@
 dataroot = "data/celeba"
 
 # Number of workers for dataloader
-workers = 4
+workers = 16
 
 # Batch size during training
-batch_size = 4
+batch_size = 64
 
 # Spatial size of training images. All images will be resized to this
 #   size using a transformer.
@@ -15,7 +15,7 @@ image_size = 64
 nc = 1
 
 # Size of z latent vector (i.e. size of generator input)
-nz = 60000
+nz = 128
 
 # Size of feature maps in generator
 ngf = 32

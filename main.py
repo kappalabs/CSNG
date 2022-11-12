@@ -75,10 +75,16 @@ def load_state(checkpoint_file_path, device, model=None):
 
 
 def main():
-    data_dir = os.path.join("DataForDavid")
-    neuron_position_file = os.path.join(data_dir, 'neuron_position_pandas_dataframe.pickle')
-    with open(neuron_position_file, 'rb') as f:
-        dataframe = pickle.load(f)
+    # data_dir = os.path.join("DataForDavid")
+    # neuron_position_file = os.path.join(data_dir, 'neuron_position_pandas_dataframe.pickle')
+    # with open(neuron_position_file, 'rb') as f:
+    #     dataframe = pickle.load(f)
+
+    data_dir = os.path.join("datasets")
+    lgn_imagenet_dataset = os.path.join(data_dir, 'lgn_convolved_imagenet_val_greyscale110x110_resize110_cropped.pickle')
+    dataset = pickle.load(open(lgn_imagenet_dataset, 'rb'))
+
+    print()
 
     #
     # ###################
@@ -90,12 +96,22 @@ def main():
     # # Print the model
     # print(netG)
 
-    sh = dataframe['sheet']
-    xs = dataframe['x']
-    ys = dataframe['y']
-    xmi, xma = np.min(np.array(xs)), np.max(np.array(xs))
-    ymi, yma = np.min(np.array(ys)), np.max(np.array(ys))
-    sheets = set(sh)
+    # sh = dataframe['sheet']
+    # xs = dataframe['x']
+    # ys = dataframe['y']
+    # xmi, xma = np.min(np.array(xs)), np.max(np.array(xs))
+    # ymi, yma = np.min(np.array(ys)), np.max(np.array(ys))
+    # sheets = set(sh)
+
+    # plt.figure(figsize=(10, 10))
+    # plt.title("Neuron positions")
+    # plt.plot(xs, ys, '.', label="positions")
+    # # plt.plot(ys, '.', label="Y")
+    # plt.xlabel("Index")
+    # plt.ylabel("Value")
+    # plt.legend()
+    # plt.savefig("neuron_positions.png")
+    # exit()
 
     dataloader = get_dataloader()
     dataloader_val = get_dataloader(training=False)
@@ -139,8 +155,8 @@ def main():
             pred_gen = netG(data_labels)
             lossG = criterion(data_img, pred_gen)
             loss_mse = criterion_mse(data_img, pred_gen)
-            loss = lossG + 0.1 * loss_mse
-            # loss = lossG
+            # loss = lossG + 0.1 * loss_mse
+            loss = lossG
             loss.backward()
             optimizerG.step()
 

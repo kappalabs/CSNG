@@ -2,6 +2,8 @@ import os
 import argparse
 import os
 import random
+
+import timm.models.resnet
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -32,16 +34,18 @@ class Generator(nn.Module):
     def __init__(self, ngpu):
         super(Generator, self).__init__()
         self.ngpu = ngpu
+
+        self.extractor = timm.models.resnet.resnet18(pretrained=False, num_classes=nz, in_chans=4)
+
         self.main = nn.Sequential(
             # input is Z, going into a convolution
-            # nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
-            nn.ConvTranspose2d(nz, ngf, 4, 1, 0, bias=False),
-            # nn.BatchNorm2d(ngf * 8),
-            nn.BatchNorm2d(ngf),
+            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            # nn.BatchNorm2d(ngf),
             nn.ReLU(True),
             # state size. (ngf*8) x 4 x 4
-            # nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-            nn.ConvTranspose2d(ngf, ngf * 4, 4, 2, 1, bias=False),
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            # nn.ConvTranspose2d(ngf, ngf * 4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 4),
             nn.ReLU(True),
             # state size. (ngf*4) x 8 x 8
@@ -59,4 +63,7 @@ class Generator(nn.Module):
         )
 
     def forward(self, input):
-        return self.main(input)
+        features = self.extractor(input).view(-1, nz, 1, 1)
+        out_img = self.main(features)
+
+        return out_img
