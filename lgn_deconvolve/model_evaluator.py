@@ -6,11 +6,12 @@ import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
+import wandb
 
 from lgn_deconvolve.lgn_data import LGNData
-from lgn_deconvolve.linear_network import LinearNetworkModel
-from lgn_deconvolve.linear_regression import LinearRegressionModel
-from lgn_deconvolve.convolution_network import ConvolutionalNetworkModel
+from ml_models.linear_network import LinearNetworkModel
+from ml_models.linear_regression import LinearRegressionModel
+from ml_models.convolution_network import ConvolutionalNetworkModel
 
 
 # Decide which device we want to run on
@@ -65,18 +66,26 @@ class ModelEvaluator:
             # CentralPxCropTransform(),
         ])
 
+        log_dict = {"test": {}}
+
         # Compute the losses
         loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_data, prediction_data)
         print(" - L1:", loss_l1.mean().item())
+        log_dict['test']['L1'] = float(loss_l1.mean().item())
 
         loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_data, prediction_data, transform_crop)
         print(" - L1 central:", loss_l1.mean().item())
+        log_dict['test']['L1_central'] = float(loss_l1.mean().item())
 
         loss_mse = ModelEvaluator.evaluate_mse_whole(gold_data, prediction_data)
         print(" - MSE:", loss_mse.mean().item())
+        log_dict['test']['MSE'] = float(loss_mse.mean().item())
 
         loss_mse = ModelEvaluator.evaluate_mse_whole(gold_data, prediction_data, transform_crop)
         print(" - MSE central:", loss_mse.mean().item())
+        log_dict['test']['MSE_central'] = float(loss_mse.mean().item())
+
+        wandb.log(log_dict, commit=True)
 
     @staticmethod
     def save_filters(filters_dir, name_prefix, weights, biases):

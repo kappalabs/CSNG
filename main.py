@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from torch.nn import Parameter
 
-from models import *
+from ml_models import *
 from dataset import *
 
 
