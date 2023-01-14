@@ -102,6 +102,9 @@ def train(config: dict, device: torch.device):
     print("Evaluating LR (#train {}) model {}".format(config['dataset_limit_train'], config['model_type']))
     ModelEvaluator.evaluate(data, model)
 
+    # Save the model predictions
+    ModelEvaluator.log_outputs(data, model, num_save=16)
+
 
 def main():
     # Init logger

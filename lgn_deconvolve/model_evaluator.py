@@ -240,6 +240,62 @@ class ModelEvaluator:
             plt.close()
 
     @staticmethod
+    def log_outputs(data, model, num_save=16):
+        gold_stimuli = data.stimuli_dataset_test[:num_save]
+        gold_responses = data.response_dataset_test[:num_save]
+
+        # Compute the predictions on testing dataset
+        print("Computing predictions...")
+        predictions_stimuli = model.predict(gold_responses)
+        print(" - computed the predictions on {} samples".format(data.num_test_data))
+
+        criterion_mse = nn.MSELoss(reduction='none')
+        criterion_l1 = nn.L1Loss(reduction='none')
+
+        CROP_SIZE = 64
+        transform_crop = transforms.Compose([
+            transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
+        ])
+
+        columns = ['id', 'stimulus', 'stimulus_center', 'prediction', 'prediction_center',
+                   'loss_l1_2D', 'loss_mse_2D',
+                   'loss_l1_center_2D', 'loss_mse_center_2D',
+                   'loss_l1_value', 'loss_mse_value',
+                   'loss_l1_center_value', 'loss_mse_center_value',
+                   ]
+        wandb_table = wandb.Table(columns=columns)
+
+        for response_idx, prediction_stimuli in enumerate(predictions_stimuli):
+            prediction_stimuli = np.squeeze(prediction_stimuli)
+
+            gold_stimulus_torch = torch.from_numpy(gold_stimuli[response_idx]).squeeze()
+            gold_stimulus_torch_crop = transform_crop(gold_stimulus_torch)
+            prediction_stimuli_torch = torch.from_numpy(prediction_stimuli).squeeze()
+            prediction_stimuli_torch_crop = transform_crop(prediction_stimuli_torch)
+
+            loss_mse = criterion_mse(gold_stimulus_torch, prediction_stimuli_torch)
+            loss_mse_crop = criterion_mse(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
+            loss_l1 = criterion_l1(gold_stimulus_torch, prediction_stimuli_torch)
+            loss_l1_crop = criterion_l1(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
+
+            wandb_table.add_data(
+                response_idx,
+                wandb.Image(gold_stimulus_torch.numpy()),
+                wandb.Image(gold_stimulus_torch_crop.numpy()),
+                wandb.Image(prediction_stimuli_torch.numpy()),
+                wandb.Image(prediction_stimuli_torch_crop.numpy()),
+                wandb.Image(loss_l1.numpy()),
+                wandb.Image(loss_mse.numpy()),
+                wandb.Image(loss_l1_crop.numpy()),
+                wandb.Image(loss_mse_crop.numpy()),
+                loss_l1.mean(),
+                loss_mse.mean(),
+                loss_l1_crop.mean(),
+                loss_mse_crop.mean(),
+            )
+        wandb.log({"predictions": wandb_table})
+
+    @staticmethod
     def plot_linear_model_dependencies(predictions_dir, name_prefix, data: LGNData, linear_model, num_save=16):
         np.random.seed(42)
 
