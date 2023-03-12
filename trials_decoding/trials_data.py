@@ -12,9 +12,11 @@ from definitions import project_dir_path
 
 class TrialsData:
 
-    def __init__(self, train_part=0.8, datanorm=None, num_trials=10, seed=42, limit_train=-1, limit_test=-1):
+    def __init__(self, train_part=0.8, datanorm_stimuli=None, datanorm_response=None, num_trials=10, seed=42,
+                 limit_train=-1, limit_test=-1):
         self.train_part = train_part
-        self.datanorm = datanorm
+        self.datanorm_stimuli = datanorm_stimuli
+        self.datanorm_response = datanorm_response
         self.num_trials = num_trials
         self.seed = seed
         self.limit_train = limit_train
@@ -67,8 +69,9 @@ class TrialsData:
                 self.dataset_test['stimulus'].append(sample_stimulus)
 
         # Training data
-        self.response_dataset_train = self.dataset_train['response'][:limit_train]
-        self.stimuli_dataset_train = self.dataset_train['stimulus'][:limit_train]  # 110 x 110
+        self.response_dataset_train = np.asarray(self.dataset_train['response'][:limit_train], dtype=np.float32)
+        # 110px x 110px
+        self.stimuli_dataset_train = np.asarray(self.dataset_train['stimulus'][:limit_train], dtype=np.float32)
 
         # Stimuli: compute offsets & standard deviations
         self.stimuli_offsets_train = np.mean(self.stimuli_dataset_train, axis=0)
@@ -79,8 +82,8 @@ class TrialsData:
         self.response_stds_train = np.std(self.response_dataset_train, axis=0)
 
         # Testing data
-        self.stimuli_dataset_test = self.dataset_test['stimulus'][:limit_test]
-        self.response_dataset_test = self.dataset_test['response'][:limit_test]
+        self.stimuli_dataset_test = np.asarray(self.dataset_test['stimulus'][:limit_test], dtype=np.float32)
+        self.response_dataset_test = np.asarray(self.dataset_test['response'][:limit_test], dtype=np.float32)
 
         # Unchanged data
         self.stimuli_dataset_train_raw = copy.deepcopy(self.stimuli_dataset_train)
@@ -88,19 +91,29 @@ class TrialsData:
         self.stimuli_dataset_test_raw = copy.deepcopy(self.stimuli_dataset_test)
         self.response_dataset_test_raw = copy.deepcopy(self.response_dataset_test)
 
-        if datanorm == 'mean0_std1':
-            self.stimuli_dataset_train -= self.stimuli_offsets_train
-            self.stimuli_dataset_train /= (self.stimuli_stds_train + 1e-15)
+        if self.datanorm_response == 'mean0_std1':
             self.response_dataset_train -= self.response_offsets_train
             self.response_dataset_train /= (self.response_stds_train + 1e-15)
 
             # Testing data
-            self.stimuli_dataset_test -= self.stimuli_offsets_train
-            self.stimuli_dataset_test /= (self.stimuli_stds_train + 1e-15)
             self.response_dataset_test -= self.response_offsets_train
             self.response_dataset_test /= (self.response_stds_train + 1e-15)
         else:
-            raise NotImplemented("Data normalization {} not implemented!".format(datanorm))
+            raise NotImplemented("Data normalization {} not implemented!".format(self.datanorm_response))
+        if self.datanorm_stimuli == 'mean0_std1':
+            self.stimuli_dataset_train -= self.stimuli_offsets_train
+            self.stimuli_dataset_train /= (self.stimuli_stds_train + 1e-15)
+
+            # Testing data
+            self.stimuli_dataset_test -= self.stimuli_offsets_train
+            self.stimuli_dataset_test /= (self.stimuli_stds_train + 1e-15)
+        elif self.datanorm_stimuli == 'zeroone':
+            self.stimuli_dataset_train /= 255.0
+
+            # Testing data
+            self.stimuli_dataset_test /= 255.0
+        else:
+            raise NotImplemented("Data normalization {} not implemented!".format(self.datanorm_stimuli))
 
         self.stimuli_shape = self.stimuli_dataset_train[0].shape
         self.response_shape = self.response_dataset_train[0].shape
@@ -116,45 +129,57 @@ class TrialsData:
         return self.stimuli_dataset_test, self.response_dataset_test, \
                self.stimuli_dataset_test_raw, self.response_dataset_test_raw
 
+    @property
+    def get_stimuli_shape(self):
+        return self.stimuli_shape
+
+    @property
+    def get_response_shape(self):
+        return self.response_shape
+
 
 class TrialsDataset(torch.utils.data.Dataset):
 
-    def __init__(self, responses, stimuli, responses_raw, stimuli_raw):
-        assert responses.shape[0] == stimuli.shape[0], \
-            "Number of responses ({}) and stimuli ({}) differs!".format(responses.shape[0], stimuli.shape[0])
-        self.num_samples = responses.shape[0]
+    def __init__(self, data: TrialsData, train: bool = True):
+        self.data = data
+        self.train = train
 
-        self.stimulus_dataset = stimuli
-        self.response_dataset = responses
+        if self.train:
+            self.stimuli, self.responses, self.stimuli_raw, self.responses_raw = data.get_train()
+        else:
+            self.stimuli, self.responses, self.stimuli_raw, self.responses_raw = data.get_test()
+
+        assert len(self.stimuli) == len(self.responses), \
+            "Number of stimuli ({}) and responses ({}) differs!".format(len(self.stimuli), len(self.responses))
+
+        self.num_samples = len(self.stimuli)
 
         self._inspect_data()
 
     def _inspect_data(self):
         mi, ma, mean, std = \
-            self.response_dataset.min(), self.response_dataset.max(), \
-            self.response_dataset.mean(), self.response_dataset.std()
+            self.responses.min(), self.responses.max(), \
+            self.responses.mean(), self.responses.std()
         print(" - responses raw description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
 
         mi, ma, mean, std = \
-            self.stimulus_dataset.min(), self.stimulus_dataset.max(), \
-            self.stimulus_dataset.mean(), self.stimulus_dataset.std()
+            self.stimuli.min(), self.stimuli.max(), \
+            self.stimuli.mean(), self.stimuli.std()
         print(" - stimuli raw description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
 
     def __len__(self):
         return self.num_samples
 
     def __getitem__(self, idx):
-        response_raw = self.response_dataset[idx]
-        response_raw_torch = transforms.ToTensor()(response_raw)
+        response = self.responses[idx]
+        response_torch = torch.from_numpy(response).float()
 
-        stimulus_raw = self.stimulus_dataset[idx]
-        stimulus_raw_torch = transforms.ToTensor()(stimulus_raw)
+        stimulus = self.stimuli[idx]
+        stimulus_torch = torch.from_numpy(stimulus).float()
 
         sample = {
-            "stimulus": stimulus,
-            "response": response,
-            "response_raw": response_raw,
-            "stimulus_raw": stimulus_raw,
+            "stimulus": stimulus_torch,
+            "response": response_torch,
         }
 
         return sample

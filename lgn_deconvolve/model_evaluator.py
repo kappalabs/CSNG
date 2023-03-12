@@ -1,23 +1,27 @@
-import os.path
 import time
+from typing import Dict
 
+import kornia
+import wandb
 import torch
+import os.path
+
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
-import wandb
 
+from ml_models.model_base import ModelBase
 from lgn_deconvolve.lgn_data import LGNData
-from ml_models.linear_network import LinearNetworkModel
-from ml_models.linear_regression import LinearRegressionModel
-from ml_models.convolution_network import ConvolutionalNetworkModel
+# from ml_models.linear_network import LinearNetworkModel
+# from ml_models.linear_regression import LinearRegressionModel
+# from ml_models.convolution_network import ConvolutionalNetworkModel
 
 
 # Decide which device we want to run on
 # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
-print('device', device)
+# device = torch.device("cpu")
+# print('device', device)
 
 
 class ModelEvaluator:
@@ -51,37 +55,44 @@ class ModelEvaluator:
         return loss_l1
 
     @staticmethod
-    def evaluate(data, model):
-        gold_data = data.stimuli_dataset_test
-        gold_labels = data.response_dataset_test
+    def evaluate(dataloader_tst: torch.utils.data.DataLoader, model: ModelBase):
+        # gold_stimuli = data.stimuli_dataset_test
+        # gold_labels = data.response_dataset_test
+
+        gold_stimuli = None
+        gold_labels = None
+        for batch_idx, batch in enumerate(dataloader_tst):
+            data, labels = batch['stimulus'], batch['response']
+            if gold_stimuli is None:
+                gold_stimuli = data.numpy()
+                gold_labels = labels.numpy()
+            else:
+                gold_stimuli = np.concatenate((gold_stimuli, data.numpy()), axis=0)
+                gold_labels = np.concatenate((gold_labels, labels.numpy()), axis=0)
 
         # Compute the predictions on testing dataset
         print("Computing predictions...")
-        prediction_data = model.predict(gold_labels)
-        print(" - computed the predictions on {} samples".format(data.num_test_data))
+        prediction_data = model.predict(dataloader_tst)
+        print(" - computed the predictions on {} samples".format(len(dataloader_tst.dataset)))
 
-        CROP_SIZE = 64
-        transform_crop = transforms.Compose([
-            transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
-            # CentralPxCropTransform(),
-        ])
+        transform_crop = ModelEvaluator.get_central_crop_transform()
 
         log_dict = {"test": {}}
 
         # Compute the losses
-        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_data, prediction_data)
+        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_stimuli, prediction_data)
         print(" - L1:", loss_l1.mean().item())
         log_dict['test']['L1'] = float(loss_l1.mean().item())
 
-        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_data, prediction_data, transform_crop)
+        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_stimuli, prediction_data, transform_crop)
         print(" - L1 central:", loss_l1.mean().item())
         log_dict['test']['L1_central'] = float(loss_l1.mean().item())
 
-        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_data, prediction_data)
+        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_stimuli, prediction_data)
         print(" - MSE:", loss_mse.mean().item())
         log_dict['test']['MSE'] = float(loss_mse.mean().item())
 
-        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_data, prediction_data, transform_crop)
+        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_stimuli, prediction_data, transform_crop)
         print(" - MSE central:", loss_mse.mean().item())
         log_dict['test']['MSE_central'] = float(loss_mse.mean().item())
 
@@ -175,6 +186,37 @@ class ModelEvaluator:
             plt.close()
 
     @staticmethod
+    def get_central_crop_transform(crop_size: int = 64):
+        transform_crop = transforms.Compose([
+            transforms.CenterCrop((crop_size, crop_size)),
+        ])
+        return transform_crop
+
+    @staticmethod
+    def compute_losses(data_stimulus, predictions) -> Dict[str, float]:
+        criterions = []
+        criterion_l1 = nn.L1Loss(reduction='none')
+        criterions.append(('L1', criterion_l1))
+        criterion_l2 = nn.MSELoss(reduction='none')
+        criterions.append(('L2', criterion_l2))
+        criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
+        criterions.append(('SSIM', criterion_ssim))
+
+        transform_crop = ModelEvaluator.get_central_crop_transform()
+
+        loss_dict = {}
+        for criterion_name, criterion in criterions:
+            loss = criterion(data_stimulus, predictions)
+            loss = loss.mean()
+            loss_dict[criterion_name] = loss.item()
+
+            loss = criterion(transform_crop(data_stimulus), transform_crop(predictions))
+            loss = loss.mean()
+            loss_dict[criterion_name + "_central"] = loss.item()
+
+        return loss_dict
+
+    @staticmethod
     def save_outputs(predictions_dir, name_prefix, data, model, num_save=16):
         os.makedirs(predictions_dir, exist_ok=True)
         print("predictions_dir", predictions_dir)
@@ -190,10 +232,7 @@ class ModelEvaluator:
         criterion_mse = nn.MSELoss(reduction='none')
         criterion_l1 = nn.L1Loss(reduction='none')
 
-        CROP_SIZE = 64
-        transform_crop = transforms.Compose([
-            transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
-        ])
+        transform_crop = ModelEvaluator.get_central_crop_transform()
 
         for response_idx, prediction_stimuli in enumerate(predictions_stimuli):
             prediction_stimuli = np.squeeze(prediction_stimuli)
@@ -240,22 +279,34 @@ class ModelEvaluator:
             plt.close()
 
     @staticmethod
-    def log_outputs(data, model, num_save=16):
-        gold_stimuli = data.stimuli_dataset_test[:num_save]
-        gold_responses = data.response_dataset_test[:num_save]
+    def log_outputs(dataloader_tst: torch.utils.data.DataLoader, model, num_save=16):
+        # gold_stimuli = data.stimuli_dataset_test[:num_save]
+        # gold_responses = data.response_dataset_test[:num_save]
+
+        gold_data = None
+        gold_labels = None
+        for batch_idx, batch in enumerate(dataloader_tst):
+            data, labels = batch['stimulus'], batch['response']
+            if gold_data is None:
+                gold_data = data.numpy()
+                gold_labels = labels.numpy()
+            else:
+                gold_data = np.concatenate((gold_data, data.numpy()), axis=0)
+                gold_labels = np.concatenate((gold_labels, labels.numpy()), axis=0)
+            if len(gold_data) >= num_save:
+                break
+        gold_stimuli = gold_data[:num_save]
+        gold_responses = gold_labels[:num_save]
 
         # Compute the predictions on testing dataset
         print("Computing predictions...")
-        predictions_stimuli = model.predict(gold_responses)
-        print(" - computed the predictions on {} samples".format(data.num_test_data))
+        predictions_stimuli = model.predict(dataloader_tst)
+        print(" - computed the predictions on {} samples".format(len(dataloader_tst.dataset)))
 
         criterion_mse = nn.MSELoss(reduction='none')
         criterion_l1 = nn.L1Loss(reduction='none')
 
-        CROP_SIZE = 64
-        transform_crop = transforms.Compose([
-            transforms.CenterCrop((CROP_SIZE, CROP_SIZE)),
-        ])
+        transform_crop = ModelEvaluator.get_central_crop_transform()
 
         columns = ['id', 'stimulus', 'stimulus_center', 'prediction', 'prediction_center',
                    'loss_l1_2D', 'loss_mse_2D',
@@ -266,6 +317,8 @@ class ModelEvaluator:
         wandb_table = wandb.Table(columns=columns)
 
         for response_idx, prediction_stimuli in enumerate(predictions_stimuli):
+            if response_idx >= num_save:
+                break
             prediction_stimuli = np.squeeze(prediction_stimuli)
 
             gold_stimulus_torch = torch.from_numpy(gold_stimuli[response_idx]).squeeze()
