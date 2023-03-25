@@ -8,10 +8,11 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 
 from typing import Tuple
+from ml_models.model_base import ModelBase
 from lgn_deconvolve.lgn_data import LGNDataset
 
 
-class LinearNetworkModel:
+class LinearNetworkModel(ModelBase):
 
     class NNModel(nn.Module):
 
@@ -108,6 +109,21 @@ class LinearNetworkModel:
         self.model.fc1.weight.data = torch.from_numpy(kernel).to(self.device, dtype=torch.float)
         if self.model.fc1.bias is not None:
             nn.init.zeros_(self.model.fc1.bias.data)
+
+    def save_model(self):
+        data = {
+            'model': self.model,
+            'wandb_run_id': self.wandb_run_id,
+            'num_epochs': self.num_epochs_curr,
+        }
+        super().save_model_data(data)
+
+    def load_model(self):
+        data = super().load_model_data()
+
+        self.model = data['model']
+        self.wandb_run_id = data['wandb_run_id']
+        self.num_epochs_curr = data['num_epochs']
 
     def fit(self, response, stimuli):
         ln_model, best_loss, best_epoch = self.model, float("inf"), 0

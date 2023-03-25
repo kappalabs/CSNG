@@ -1,98 +1,91 @@
-import os
-import pickle
+import torch
 
 import numpy as np
 
 from typing import Tuple
+from ml_models.model_base import ModelBase
 from sklearn.linear_model import LinearRegression
 
 
-class LinearRegressionModel:
+class LinearRegressionModel(ModelBase):
 
-    def __init__(self, checkpoint_filepath: str):
-        self.checkpoint_filepath = checkpoint_filepath
+    def __init__(self, checkpoint_filepath: str, device: torch.device, config: dict,
+                 data_stimuli_shape: tuple, data_response_shape: tuple):
+        super().__init__(checkpoint_filepath, device, config, data_stimuli_shape, data_response_shape)
 
-        self.wandb_run_id = None
-        self.num_epochs = 0
-
-        self.model = None
-        # self.model_name = self.get_name()
-        # self.model_path = os.path.join(self.get_name(), subfolder)
-        # self.model_filepath = os.path.join(self.model_path, 'model.pkl')
-
-        self.stimuli_shape = None
-        self.response_shape = None
-        self.lr_model = None
-
-        self.load_model()
-
-    # @staticmethod
-    # def get_name():
-    #     name = "linear_regression_model"
-    #
-    #     return name
+        self.load_model_data()
 
     @staticmethod
     def flatten(data):
         return np.reshape(data, (data.shape[0], -1))
 
     def save_model(self):
-        os.makedirs(os.path.dirname(self.checkpoint_filepath), exist_ok=True)
-        with open(self.checkpoint_filepath, 'wb') as f:
-            pickle.dump({
-                'model': self.lr_model,
-                'wandb_run_id': self.wandb_run_id,
-                'num_epochs': self.num_epochs,
-                'stimuli_shape': self.stimuli_shape,
-                'response_shape': self.response_shape,
-            }, f)
+        data = {
+            'model': self.model,
+            'wandb_run_id': self.wandb_run_id,
+            'num_epochs': self.num_epochs_curr,
+        }
+        super().save_model_data(data)
 
     def load_model(self):
-        if not os.path.isfile(self.checkpoint_filepath):
-            print("The model {} does not exist".format(self.checkpoint_filepath))
-            return
+        data = super().load_model_data()
 
-        with open(self.checkpoint_filepath, 'rb') as f:
-            data = pickle.load(f)
-        self.lr_model = data['model']
+        self.model = data['model']
         self.wandb_run_id = data['wandb_run_id']
-        self.num_epochs = data['num_epochs']
-        self.stimuli_shape = data['stimuli_shape']
-        self.response_shape = data['response_shape']
+        self.num_epochs_curr = data['num_epochs']
 
-        print("Loaded model from {} with num_epochs {}".format(self.checkpoint_filepath, self.num_epochs))
-
-    def train(self, stimuli, response):
+    def train(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader):
         # Set up the model
-        self.lr_model = LinearRegression(fit_intercept=False)
-        self.stimuli_shape = stimuli.shape[-2:]
-        self.response_shape = response.shape[-2:]
+        self.model = LinearRegression()
+
+        gold_stimuli = None
+        gold_response = None
+        for batch_idx, batch in enumerate(dataloader_trn):
+            stimulus_, response_ = batch['stimulus'], batch['response']
+            if gold_stimuli is None:
+                gold_stimuli = stimulus_.numpy()
+                gold_response = response_.numpy()
+            else:
+                gold_stimuli = np.concatenate((gold_stimuli, stimulus_.numpy()), axis=0)
+                gold_response = np.concatenate((gold_response, response_.numpy()), axis=0)
 
         # Fit the model
         print("fitting the model")
-        response_flat = LinearRegressionModel.flatten(response)
-        stimuli_flat = LinearRegressionModel.flatten(stimuli)
-        self.lr_model.fit(response_flat, stimuli_flat)
+        response_flat = LinearRegressionModel.flatten(gold_response)
+        stimuli_flat = LinearRegressionModel.flatten(gold_stimuli)
+        self.model.fit(response_flat, stimuli_flat)
         print("model fitted")
-        self.num_epochs += 1
+        self.num_epochs_curr += 1
 
         # Save the fitted model
         self.save_model()
 
-    def predict(self, response):
-        if self.lr_model is None:
-            raise Exception("Model not trained")
+    def predict(self, dataloader: torch.utils.data.DataLoader):
+        super().predict(dataloader)
 
-        flattened_prediction = self.lr_model.predict(LinearRegressionModel.flatten(response))
-        prediction = flattened_prediction.reshape((-1, *self.stimuli_shape))
+        # For each batch in the dataloader
+        predictions = None
+        for batch_idx, batch in enumerate(dataloader):
+            # Convert torch tensor to numpy array
+            data_response = batch['response'].detach().cpu().numpy()
+
+            flattened_prediction = self.model.predict(LinearRegressionModel.flatten(data_response))
+            prediction = flattened_prediction.reshape((-1, *self.stimuli_shape))
+
+            if predictions is None:
+                predictions = prediction
+            else:
+                predictions = np.concatenate([predictions, prediction], axis=0)
+
+        prediction = predictions
 
         return prediction
 
     def get_kernel(self) -> Tuple[np.ndarray, np.ndarray]:
-        if self.lr_model is None:
+        if self.model is None:
             raise Exception("Model not trained")
 
-        weights = self.lr_model.coef_
+        weights = self.model.coef_
         biases = np.zeros((110, 110))
 
         weights = np.reshape(weights, (-1, 51, 51))

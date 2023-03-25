@@ -245,20 +245,16 @@ class ConvolutionalNetworkModel(ModelBase):
                 self.best_loss = loss
                 self.save_model()
 
-    def predict(self, dataloader_tst: torch.utils.data.DataLoader):
-        super().predict(dataloader_tst)
+    def predict(self, dataloader: torch.utils.data.DataLoader):
+        super().predict(dataloader)
 
         self.model.eval()
 
-        # Create the dataloader
-        # dataloader_tst = torch.utils.data.DataLoader(
-        #     LGNDataset(response_np, None, self.datanorm),
-        #     batch_size=512, shuffle=False, num_workers=self.num_workers)
-        print("Returning loader with", len(dataloader_tst.dataset), "samples")
+        print("Received loader with", len(dataloader.dataset), "samples")
 
         # For each batch in the dataloader
         predictions = None
-        for i, data in enumerate(dataloader_tst, 0):
+        for i, data in enumerate(dataloader, 0):
             data_response = data['response'].to(self.device, dtype=torch.float)
 
             prediction = self.model(data_response).detach().cpu().numpy()
