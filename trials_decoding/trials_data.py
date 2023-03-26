@@ -4,7 +4,6 @@ import pickle
 import torch.utils.data
 
 import numpy as np
-import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
 
 from definitions import project_dir_path
@@ -24,12 +23,12 @@ class TrialsData:
 
         # Load the dataset from pickle file
         data_dir = os.path.join(project_dir_path, "datasets")
-        if num_trials == 1:
+        if self.num_trials == 1:
             neuron_position_file = os.path.join(data_dir, 'one_trial.pickle')
-        elif num_trials == 10:
+        elif self.num_trials == 10:
             neuron_position_file = os.path.join(data_dir, 'ten_trials.pickle')
         else:
-            raise RuntimeError("unavailable number of trials:", num_trials)
+            raise RuntimeError("unavailable number of trials:", self.num_trials)
         with open(neuron_position_file, 'rb') as f:
             self.dataset = pickle.load(f)
 
@@ -37,7 +36,7 @@ class TrialsData:
         self.num_all_data = len(self.dataset)
 
         # Calculate training set size
-        self.num_train_data = int(self.num_all_data * train_part)
+        self.num_train_data = int(self.num_all_data * self.train_part)
         self.num_test_data = self.num_all_data - self.num_train_data
 
         # Update the limits
@@ -48,7 +47,7 @@ class TrialsData:
 
         # Split the data
         keys = sorted(list(self.dataset.keys()))
-        np.random.seed(seed)
+        np.random.seed(self.seed)
         keys_train = set(np.random.choice(keys, self.num_train_data, replace=False))
         self.dataset_train = {'response': [], 'stimulus': []}
         self.dataset_test = {'response': [], 'stimulus': []}
@@ -69,9 +68,9 @@ class TrialsData:
                 self.dataset_test['stimulus'].append(sample_stimulus)
 
         # Training data
-        self.response_dataset_train = np.asarray(self.dataset_train['response'][:limit_train], dtype=np.float32)
+        self.response_dataset_train = np.asarray(self.dataset_train['response'][:self.limit_train], dtype=np.float32)
         # 110px x 110px
-        self.stimuli_dataset_train = np.asarray(self.dataset_train['stimulus'][:limit_train], dtype=np.float32)
+        self.stimuli_dataset_train = np.asarray(self.dataset_train['stimulus'][:self.limit_train], dtype=np.float32)
 
         # Stimuli: compute offsets & standard deviations
         self.stimuli_offsets_train = np.mean(self.stimuli_dataset_train, axis=0)
@@ -82,8 +81,8 @@ class TrialsData:
         self.response_stds_train = np.std(self.response_dataset_train, axis=0)
 
         # Testing data
-        self.stimuli_dataset_test = np.asarray(self.dataset_test['stimulus'][:limit_test], dtype=np.float32)
-        self.response_dataset_test = np.asarray(self.dataset_test['response'][:limit_test], dtype=np.float32)
+        self.stimuli_dataset_test = np.asarray(self.dataset_test['stimulus'][:self.limit_test], dtype=np.float32)
+        self.response_dataset_test = np.asarray(self.dataset_test['response'][:self.limit_test], dtype=np.float32)
 
         # Unchanged data
         self.stimuli_dataset_train_raw = copy.deepcopy(self.stimuli_dataset_train)
