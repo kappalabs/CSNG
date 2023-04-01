@@ -12,7 +12,7 @@ from definitions import project_dir_path
 class TrialsData:
 
     def __init__(self, train_part=0.8, datanorm_stimuli=None, datanorm_response=None, num_trials=10, seed=42,
-                 limit_train=-1, limit_test=-1):
+                 limit_train=-1, limit_test=-1, debug_save_images=False):
         self.train_part = train_part
         self.datanorm_stimuli = datanorm_stimuli
         self.datanorm_response = datanorm_response
@@ -20,6 +20,7 @@ class TrialsData:
         self.seed = seed
         self.limit_train = limit_train
         self.limit_test = limit_test
+        self.debug_save_images = debug_save_images
 
         # Load the dataset from pickle file
         data_dir = os.path.join(project_dir_path, "datasets")
@@ -34,6 +35,22 @@ class TrialsData:
 
         # Number of all available samples
         self.num_all_data = len(self.dataset)
+
+        if self.debug_save_images:
+            import re
+            from PIL import Image
+            for sample_info, sample_dict in self.dataset.items():
+                sample_stimulus = sample_dict['stimulus']
+                image_name = re.sub(r'.*image_location', '', sample_info)
+                image_name = re.sub(r'.*/', '', image_name)
+                image_name = re.sub(r'\'.*', '', image_name)
+
+                img_np = sample_stimulus
+                img_np = np.array(img_np, dtype=np.uint8)
+                img_pil = Image.fromarray(img_np)
+                img_pil.save("tmp_both/stimuli_{}.png".format(image_name))
+                img_pil.close()
+            exit()
 
         # Calculate training set size
         self.num_train_data = int(self.num_all_data * self.train_part)
