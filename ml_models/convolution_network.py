@@ -2,6 +2,7 @@ import os
 import copy
 import wandb
 import torch
+import importlib
 import kornia.losses
 import torch.utils.data
 
@@ -12,15 +13,17 @@ import torch.optim as optim
 from typing import Tuple
 from collections import defaultdict
 from ml_models.model_base import ModelBase
-from ml_models.conv_models.model_v1 import NNModel
 from lgn_deconvolve.model_evaluator import ModelEvaluator
+from ml_models.conv_models.conv_model_base import CNNModelBase
 
 
 class ConvolutionalNetworkModel(ModelBase):
 
     def __init__(self, checkpoint_filepath: str, device: torch.device, config: dict,
-                 data_stimuli_shape: tuple, data_response_shape: tuple):
+                 data_stimuli_shape: tuple, data_response_shape: tuple, version: int = 1):
         super().__init__(checkpoint_filepath, device, config, data_stimuli_shape, data_response_shape)
+
+        self.version = version
 
         self.model_loss = config['model_loss']
         self.best_loss = float("inf")
@@ -54,6 +57,7 @@ class ConvolutionalNetworkModel(ModelBase):
             'num_epochs': self.num_epochs_curr,
             'stimuli_shape': self.stimuli_shape,
             'response_shape': self.response_shape,
+            'version': self.version,
         }
         super().save_model_data(data)
 
@@ -61,7 +65,9 @@ class ConvolutionalNetworkModel(ModelBase):
         data = super().load_model_data()
 
         # Define the network
-        self.model = NNModel(self.stimuli_shape, self.response_shape)
+        module_model = importlib.import_module("ml_models.conv_models.model_v{}".format(self.version))
+        CNNModel = getattr(module_model, "CNNModel")
+        self.model = CNNModel(self.stimuli_shape, self.response_shape)
         self.model.to(self.device)
 
         if data is not None:
@@ -72,6 +78,11 @@ class ConvolutionalNetworkModel(ModelBase):
             self.num_epochs_curr = data['num_epochs']
             self.stimuli_shape = data['stimuli_shape']
             self.response_shape = data['response_shape']
+            saved_version = data['version']
+
+            if saved_version != self.version:
+                raise Exception("Saved model version ({}) does not match current model version ({})".format(
+                    saved_version, self.version))
 
         print("printing the model summary (for debugging purposes)...")
         from torchinfo import summary
@@ -116,7 +127,10 @@ class ConvolutionalNetworkModel(ModelBase):
                     predictions = transform_crop(predictions)
                 # Compute the loss
                 loss = self.criterion(data_stimulus, predictions)
-                epoch_loss += loss.mean(dim=1).mean(dim=1).mean(dim=1).sum()
+                if len(loss.shape) == 4:
+                    epoch_loss += loss.mean(dim=1).mean(dim=1).mean(dim=1).sum()
+                if len(loss.shape) == 3:
+                    epoch_loss += loss.mean(dim=1).mean(dim=1).sum()
                 loss = loss.mean()
                 # Back-propagate the loss
                 loss.backward()
