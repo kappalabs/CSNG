@@ -308,7 +308,8 @@ class ModelEvaluator:
             plt.close()
 
     @staticmethod
-    def log_outputs(dataloader: torch.utils.data.DataLoader, model, num_save=16, log_dict_prefix: str = 'test.'):
+    def log_outputs(dataloader: torch.utils.data.DataLoader, model, num_save=16,
+                    log_dict_prefix: str = 'test.') -> dict:
         gold_data = None
         for batch_idx, batch in enumerate(dataloader):
             data, labels = batch['stimulus'], batch['response']
@@ -368,7 +369,9 @@ class ModelEvaluator:
                 loss_l1_crop.mean(),
                 loss_mse_crop.mean(),
             )
-        wandb.log({log_dict_prefix + "predictions": wandb_table})
+        log_dict = {log_dict_prefix + "predictions": wandb_table}
+
+        return log_dict
 
     @staticmethod
     def plot_linear_model_dependencies(predictions_dir, name_prefix, data: LGNData, linear_model, num_save=16):
