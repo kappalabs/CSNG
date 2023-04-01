@@ -27,6 +27,7 @@ def get_configuration():
         "dataset_normalization_stimuli": "zeroone",
         "dataset_normalization_response": "mean0_std1",
         "model_type": "linear_regression",
+        "model_version": "1",
         "model_loss": "L1",
         "model_name": 'dummy.pth',
         "clear_progress": True,
@@ -46,7 +47,8 @@ def get_configuration():
     parser.add_argument('--dataset_normalization_response', type=str,
                         default=default_config['dataset_normalization_response'])
     parser.add_argument('--model_type', type=str, default=default_config['model_type'])
-    parser.add_argument('--model_loss', type=str, default=default_config['model_loss'], help="L1/MSE/SSIM/MSSSIM")
+    parser.add_argument('--model_version', type=int, default=default_config['model_version'])
+    parser.add_argument('--model_loss', type=str, default=default_config['model_loss'], help="L1/MSE/SSIM/MSSSIM/PSNR")
     parser.add_argument('--model_name', type=str, default=default_config['model_name'])
     parser.add_argument('--clear_progress', default=default_config['clear_progress'], action='store_true')
 
@@ -102,7 +104,7 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
                                    data.get_stimuli_shape, data.get_response_shape)
     elif config['model_type'] == 'convolution_network':
         model = ConvolutionalNetworkModel(checkpoint_filepath, device, config,
-                                          data.get_stimuli_shape, data.get_response_shape)
+                                          data.get_stimuli_shape, data.get_response_shape, config['model_version'])
     else:
         raise NotImplementedError("Model type {} is not supported!".format(config['model_type']))
 
