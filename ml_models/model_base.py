@@ -1,6 +1,6 @@
 import os
 import abc
-
+import wandb
 import torch
 import pickle
 
@@ -32,6 +32,9 @@ class ModelBase(abc.ABC):
             pickle.dump(state, f)
 
         print("Saved model to {}".format(self.checkpoint_filepath))
+
+        wandb.save(self.checkpoint_filepath)
+        print("Saved model to wandb")
 
     def load_model_data(self) -> dict:
         if not os.path.isfile(self.checkpoint_filepath):
