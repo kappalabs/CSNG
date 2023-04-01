@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 import torch
 import wandb
@@ -25,7 +24,7 @@ def get_configuration():
         "dataset_num_trials": 10,
         "dataset_limit_train": -1,
         "dataset_limit_test": -1,
-        "dataset_normalization_stimuli": "mean0_std1",
+        "dataset_normalization_stimuli": "zeroone",
         "dataset_normalization_response": "mean0_std1",
         "model_type": "linear_regression",
         "model_loss": "L1",
@@ -47,7 +46,7 @@ def get_configuration():
     parser.add_argument('--dataset_normalization_response', type=str,
                         default=default_config['dataset_normalization_response'])
     parser.add_argument('--model_type', type=str, default=default_config['model_type'])
-    parser.add_argument('--model_loss', type=str, default=default_config['model_loss'])
+    parser.add_argument('--model_loss', type=str, default=default_config['model_loss'], help="L1/MSE/SSIM/MSSSIM")
     parser.add_argument('--model_name', type=str, default=default_config['model_name'])
     parser.add_argument('--clear_progress', default=default_config['clear_progress'], action='store_true')
 
@@ -65,9 +64,11 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
         datanorm_response=config['dataset_normalization_response'],
         limit_train=config['dataset_limit_train'],
         limit_test=config['dataset_limit_test'],
+        num_trials=config['dataset_num_trials'],
     )
-    dataset_trn = TrialsDataset(data, train=True)
-    dataset_tst = TrialsDataset(data, train=False)
+    dataset_trn = TrialsDataset(data, data_type='train')
+    dataset_val = TrialsDataset(data, data_type='validation')
+    dataset_tst = TrialsDataset(data, data_type='test')
 
     # Prepare dataloader
     dataloader_trn = torch.utils.data.DataLoader(
@@ -77,6 +78,13 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
         num_workers=config['num_workers'],
     )
     print("Prepared TRN dataloader with", len(dataloader_trn.dataset), "samples")
+    dataloader_val = torch.utils.data.DataLoader(
+        dataset=dataset_val,
+        batch_size=config['batch_size'],
+        shuffle=False,
+        num_workers=config['num_workers'],
+    )
+    print("Prepared VAL dataloader with", len(dataloader_val.dataset), "samples")
     dataloader_tst = torch.utils.data.DataLoader(
         dataset=dataset_tst,
         batch_size=config['batch_size'],
@@ -101,12 +109,12 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
     # Get the info from loaded model
     wandb_run_id = model.wandb_run_id
 
-    return model, dataloader_trn, dataloader_tst, wandb_run_id
+    return model, dataloader_trn, dataloader_val, dataloader_tst, wandb_run_id
 
 
 def train(config: dict, device: torch.device):
     checkpoint_filepath = os.path.join(project_dir_path, "checkpoints", config['model_type'], config['model_name'])
-    model, dataloader_trn, dataloader_tst, wandb_run_id = \
+    model, dataloader_trn, dataloader_val, dataloader_tst, wandb_run_id = \
         load_checkpoint(config, checkpoint_filepath, device)  # type: ModelBase
 
     # Initialize W&b
@@ -117,14 +125,16 @@ def train(config: dict, device: torch.device):
     model.checkpoint_filepath = checkpoint_filepath
 
     # Train the model
-    model.train(dataloader_trn, dataloader_tst)
+    model.train(dataloader_trn, dataloader_val)
 
     # Evaluate the model
     print("Evaluating LR (#train {}) model {}".format(config['dataset_limit_train'], config['model_type']))
-    ModelEvaluator.evaluate(dataloader_tst, model)
+    evaluate_dict = ModelEvaluator.evaluate(dataloader_tst, model, log_dict_prefix='test.')
+    wandb.log(evaluate_dict, commit=False)
 
     # Save the model predictions
-    ModelEvaluator.log_outputs(dataloader_tst, model, num_save=16)
+    outputs_dict = ModelEvaluator.log_outputs(dataloader_tst, model, num_save=16, log_dict_prefix='test.')
+    wandb.log(outputs_dict, commit=True)
 
 
 def main():
