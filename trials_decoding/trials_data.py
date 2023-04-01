@@ -11,15 +11,17 @@ from definitions import project_dir_path
 
 class TrialsData:
 
-    def __init__(self, train_part=0.8, datanorm_stimuli=None, datanorm_response=None, num_trials=10, seed=42,
-                 limit_train=-1, limit_test=-1, debug_save_images=False):
+    def __init__(self, train_part=0.7, val_part=0.1, datanorm_stimuli=None, datanorm_response=None, num_trials=10,
+                 seed=42, limit_train=-1, limit_val=-1, limit_test=-1, debug_save_images=False):
         self.train_part = train_part
+        self.val_part = val_part
         self.datanorm_stimuli = datanorm_stimuli
         self.datanorm_response = datanorm_response
         self.num_trials = num_trials
         self.seed = seed
         self.limit_train = limit_train
         self.limit_test = limit_test
+        self.limit_val = limit_val
         self.debug_save_images = debug_save_images
 
         # Load the dataset from pickle file
@@ -54,11 +56,14 @@ class TrialsData:
 
         # Calculate training set size
         self.num_train_data = int(self.num_all_data * self.train_part)
-        self.num_test_data = self.num_all_data - self.num_train_data
+        self.num_val_data = int(self.num_all_data * self.val_part)
+        self.num_test_data = self.num_all_data - self.num_train_data - self.num_val_data
 
         # Update the limits
         if self.limit_train < 0 or self.limit_train > self.num_train_data:
             self.limit_train = self.num_train_data
+        if self.limit_val < 0 or self.limit_val > self.num_val_data:
+            self.limit_val = self.num_val_data
         if self.limit_test < 0 or self.limit_test > self.num_test_data:
             self.limit_test = self.num_test_data
 
@@ -66,7 +71,9 @@ class TrialsData:
         keys = sorted(list(self.dataset.keys()))
         np.random.seed(self.seed)
         keys_train = set(np.random.choice(keys, self.num_train_data, replace=False))
+        keys_val = set(np.random.choice(set(keys) - keys_train, self.num_val_data, replace=False))
         self.dataset_train = {'response': [], 'stimulus': []}
+        self.dataset_val = {'response': [], 'stimulus': []}
         self.dataset_test = {'response': [], 'stimulus': []}
         for sample_info, sample_dict in self.dataset.items():
             sample_response = np.hstack([
@@ -80,6 +87,9 @@ class TrialsData:
             if sample_info in keys_train:
                 self.dataset_train['response'].append(sample_response)
                 self.dataset_train['stimulus'].append(sample_stimulus)
+            elif sample_info in keys_val:
+                self.dataset_val['response'].append(sample_response)
+                self.dataset_val['stimulus'].append(sample_stimulus)
             else:
                 self.dataset_test['response'].append(sample_response)
                 self.dataset_test['stimulus'].append(sample_stimulus)
@@ -97,6 +107,10 @@ class TrialsData:
         self.response_offsets_train = np.mean(self.response_dataset_train, axis=0)
         self.response_stds_train = np.std(self.response_dataset_train, axis=0)
 
+        # Validation data
+        self.stimuli_dataset_val = np.asarray(self.dataset_val['stimulus'][:self.limit_val], dtype=np.float32)
+        self.response_dataset_val = np.asarray(self.dataset_val['response'][:self.limit_val], dtype=np.float32)
+
         # Testing data
         self.stimuli_dataset_test = np.asarray(self.dataset_test['stimulus'][:self.limit_test], dtype=np.float32)
         self.response_dataset_test = np.asarray(self.dataset_test['response'][:self.limit_test], dtype=np.float32)
@@ -104,12 +118,18 @@ class TrialsData:
         # Unchanged data
         self.stimuli_dataset_train_raw = copy.deepcopy(self.stimuli_dataset_train)
         self.response_dataset_train_raw = copy.deepcopy(self.response_dataset_train)
+        self.stimuli_dataset_val_raw = copy.deepcopy(self.stimuli_dataset_val)
+        self.response_dataset_val_raw = copy.deepcopy(self.response_dataset_val)
         self.stimuli_dataset_test_raw = copy.deepcopy(self.stimuli_dataset_test)
         self.response_dataset_test_raw = copy.deepcopy(self.response_dataset_test)
 
         if self.datanorm_response == 'mean0_std1':
             self.response_dataset_train -= self.response_offsets_train
             self.response_dataset_train /= (self.response_stds_train + 1e-15)
+
+            # Validation data
+            self.response_dataset_val -= self.response_offsets_train
+            self.response_dataset_val /= (self.response_stds_train + 1e-15)
 
             # Testing data
             self.response_dataset_test -= self.response_offsets_train
@@ -120,11 +140,18 @@ class TrialsData:
             self.stimuli_dataset_train -= self.stimuli_offsets_train
             self.stimuli_dataset_train /= (self.stimuli_stds_train + 1e-15)
 
+            # Validation data
+            self.stimuli_dataset_val -= self.stimuli_offsets_train
+            self.stimuli_dataset_val /= (self.stimuli_stds_train + 1e-15)
+
             # Testing data
             self.stimuli_dataset_test -= self.stimuli_offsets_train
             self.stimuli_dataset_test /= (self.stimuli_stds_train + 1e-15)
         elif self.datanorm_stimuli == 'zeroone':
             self.stimuli_dataset_train /= 255.0
+
+            # Validation data
+            self.stimuli_dataset_val /= 255.0
 
             # Testing data
             self.stimuli_dataset_test /= 255.0
@@ -135,11 +162,16 @@ class TrialsData:
         self.response_shape = self.response_dataset_train[0].shape
 
         self.num_train_data = len(self.stimuli_dataset_train)
+        self.num_val_data = len(self.stimuli_dataset_val)
         self.num_test_data = len(self.stimuli_dataset_test)
 
     def get_train(self):
         return self.stimuli_dataset_train, self.response_dataset_train, \
                self.stimuli_dataset_train_raw, self.response_dataset_train_raw
+
+    def get_val(self):
+        return self.stimuli_dataset_val, self.response_dataset_val, \
+               self.stimuli_dataset_val_raw, self.response_dataset_val_raw
 
     def get_test(self):
         return self.stimuli_dataset_test, self.response_dataset_test, \
@@ -156,14 +188,18 @@ class TrialsData:
 
 class TrialsDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data: TrialsData, train: bool = True):
+    def __init__(self, data: TrialsData, data_type: str = 'train'):
         self.data = data
-        self.train = train
+        self.data_type = data_type
 
-        if self.train:
+        if self.data_type == 'train':
             self.stimuli, self.responses, self.stimuli_raw, self.responses_raw = data.get_train()
-        else:
+        elif self.data_type == 'validation':
+            self.stimuli, self.responses, self.stimuli_raw, self.responses_raw = data.get_val()
+        elif self.data_type == 'test':
             self.stimuli, self.responses, self.stimuli_raw, self.responses_raw = data.get_test()
+        else:
+            raise NotImplemented("Data type {} not implemented!".format(self.data_type))
 
         assert len(self.stimuli) == len(self.responses), \
             "Number of stimuli ({}) and responses ({}) differs!".format(len(self.stimuli), len(self.responses))
@@ -176,12 +212,12 @@ class TrialsDataset(torch.utils.data.Dataset):
         mi, ma, mean, std = \
             self.responses.min(), self.responses.max(), \
             self.responses.mean(), self.responses.std()
-        print(" - responses raw description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
+        print(" - responses description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
 
         mi, ma, mean, std = \
             self.stimuli.min(), self.stimuli.max(), \
             self.stimuli.mean(), self.stimuli.std()
-        print(" - stimuli raw description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
+        print(" - stimuli description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
 
     def __len__(self):
         return self.num_samples
