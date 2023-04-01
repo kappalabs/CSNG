@@ -71,7 +71,7 @@ class TrialsData:
         keys = sorted(list(self.dataset.keys()))
         np.random.seed(self.seed)
         keys_train = set(np.random.choice(keys, self.num_train_data, replace=False))
-        keys_val = set(np.random.choice(set(keys) - keys_train, self.num_val_data, replace=False))
+        keys_val = set(np.random.choice(list(set(keys) - keys_train), self.num_val_data, replace=False))
         self.dataset_train = {'response': [], 'stimulus': []}
         self.dataset_val = {'response': [], 'stimulus': []}
         self.dataset_test = {'response': [], 'stimulus': []}
