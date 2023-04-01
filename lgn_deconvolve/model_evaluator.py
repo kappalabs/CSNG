@@ -31,21 +31,14 @@ class ModelEvaluator:
         num_samples = gold_data.shape[0]
         sums = 0
         for sample_idx in range(num_samples):
-            gold_dato = torch.from_numpy(gold_data[sample_idx]).squeeze()
-            prediction_dato = torch.from_numpy(prediction_data[sample_idx]).squeeze()
+            gold_dato = torch.from_numpy(gold_data[sample_idx]).unsqueeze(0).unsqueeze(0)
+            prediction_dato = torch.from_numpy(prediction_data[sample_idx]).unsqueeze(0)
             if transform is not None:
                 gold_dato = transform(gold_dato)
                 prediction_dato = transform(prediction_dato)
             sums += loss(gold_dato, prediction_dato)
 
         return sums / num_samples
-
-    @staticmethod
-    def evaluate_mse_whole(gold_data, prediction_data, transform=None):
-        criterion_mse = nn.MSELoss(reduction='none')
-        loss_l1 = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_mse, transform)
-
-        return loss_l1
 
     @staticmethod
     def evaluate_l1_whole(gold_data, prediction_data, transform=None):
@@ -55,10 +48,28 @@ class ModelEvaluator:
         return loss_l1
 
     @staticmethod
-    def evaluate(dataloader_tst: torch.utils.data.DataLoader, model: ModelBase):
-        # gold_stimuli = data.stimuli_dataset_test
-        # gold_labels = data.response_dataset_test
+    def evaluate_mse_whole(gold_data, prediction_data, transform=None):
+        criterion_mse = nn.MSELoss(reduction='none')
+        loss_l2 = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_mse, transform)
 
+        return loss_l2
+
+    @staticmethod
+    def evaluate_ssim_whole(gold_data, prediction_data, transform=None):
+        criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
+        loss_ssim = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_ssim, transform)
+
+        return loss_ssim
+
+    @staticmethod
+    def evaluate_msssim_whole(gold_data, prediction_data, transform=None):
+        criterion_msssim = kornia.losses.MS_SSIMLoss(reduction='none')
+        loss_ssim = ModelEvaluator.evaluate_mean_loss(gold_data, prediction_data, criterion_msssim, transform)
+
+        return loss_ssim
+
+    @staticmethod
+    def evaluate(dataloader_tst: torch.utils.data.DataLoader, model: ModelBase, log_dict_prefix: str = 'test.') -> dict:
         gold_stimuli = None
         gold_labels = None
         for batch_idx, batch in enumerate(dataloader_tst):
@@ -77,26 +88,42 @@ class ModelEvaluator:
 
         transform_crop = ModelEvaluator.get_central_crop_transform()
 
-        log_dict = {"test": {}}
+        log_dict = {}
 
         # Compute the losses
         loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_stimuli, prediction_data)
         print(" - L1:", loss_l1.mean().item())
-        log_dict['test']['L1'] = float(loss_l1.mean().item())
+        log_dict[log_dict_prefix + 'L1'] = float(loss_l1.mean().item())
 
         loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_stimuli, prediction_data, transform_crop)
         print(" - L1 central:", loss_l1.mean().item())
-        log_dict['test']['L1_central'] = float(loss_l1.mean().item())
+        log_dict[log_dict_prefix + 'L1_central'] = float(loss_l1.mean().item())
 
         loss_mse = ModelEvaluator.evaluate_mse_whole(gold_stimuli, prediction_data)
         print(" - MSE:", loss_mse.mean().item())
-        log_dict['test']['MSE'] = float(loss_mse.mean().item())
+        log_dict[log_dict_prefix + 'MSE'] = float(loss_mse.mean().item())
 
         loss_mse = ModelEvaluator.evaluate_mse_whole(gold_stimuli, prediction_data, transform_crop)
         print(" - MSE central:", loss_mse.mean().item())
-        log_dict['test']['MSE_central'] = float(loss_mse.mean().item())
+        log_dict[log_dict_prefix + 'MSE_central'] = float(loss_mse.mean().item())
 
-        wandb.log(log_dict, commit=True)
+        loss_ssim = ModelEvaluator.evaluate_ssim_whole(gold_stimuli, prediction_data)
+        print(" - SSIM :", loss_ssim.mean().item())
+        log_dict[log_dict_prefix + 'SSIM'] = float(loss_ssim.mean().item())
+
+        loss_ssim = ModelEvaluator.evaluate_ssim_whole(gold_stimuli, prediction_data, transform_crop)
+        print(" - SSIM central:", loss_ssim.mean().item())
+        log_dict[log_dict_prefix + 'SSIM_central'] = float(loss_ssim.mean().item())
+
+        loss_msssim = ModelEvaluator.evaluate_msssim_whole(gold_stimuli, prediction_data)
+        print(" - MSSSIM :", loss_msssim.mean().item())
+        log_dict[log_dict_prefix + 'MSSSIM'] = float(loss_msssim.mean().item())
+
+        loss_msssim = ModelEvaluator.evaluate_msssim_whole(gold_stimuli, prediction_data, transform_crop)
+        print(" - MSSSIM central:", loss_msssim.mean().item())
+        log_dict[log_dict_prefix + 'MSSSIM_central'] = float(loss_msssim.mean().item())
+
+        return log_dict
 
     @staticmethod
     def save_filters(filters_dir, name_prefix, weights, biases):
@@ -197,10 +224,12 @@ class ModelEvaluator:
         criterions = []
         criterion_l1 = nn.L1Loss(reduction='none')
         criterions.append(('L1', criterion_l1))
-        criterion_l2 = nn.MSELoss(reduction='none')
-        criterions.append(('L2', criterion_l2))
+        criterion_mse = nn.MSELoss(reduction='none')
+        criterions.append(('MSE', criterion_mse))
         criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
         criterions.append(('SSIM', criterion_ssim))
+        criterion_ms_ssim = kornia.losses.MS_SSIMLoss(reduction='none')
+        criterions.append(('MS_SSIM', criterion_ms_ssim))
 
         transform_crop = ModelEvaluator.get_central_crop_transform()
 
@@ -279,29 +308,22 @@ class ModelEvaluator:
             plt.close()
 
     @staticmethod
-    def log_outputs(dataloader_tst: torch.utils.data.DataLoader, model, num_save=16):
-        # gold_stimuli = data.stimuli_dataset_test[:num_save]
-        # gold_responses = data.response_dataset_test[:num_save]
-
+    def log_outputs(dataloader: torch.utils.data.DataLoader, model, num_save=16, log_dict_prefix: str = 'test.'):
         gold_data = None
-        gold_labels = None
-        for batch_idx, batch in enumerate(dataloader_tst):
+        for batch_idx, batch in enumerate(dataloader):
             data, labels = batch['stimulus'], batch['response']
             if gold_data is None:
                 gold_data = data.numpy()
-                gold_labels = labels.numpy()
             else:
                 gold_data = np.concatenate((gold_data, data.numpy()), axis=0)
-                gold_labels = np.concatenate((gold_labels, labels.numpy()), axis=0)
             if len(gold_data) >= num_save:
                 break
         gold_stimuli = gold_data[:num_save]
-        gold_responses = gold_labels[:num_save]
 
         # Compute the predictions on testing dataset
         print("Computing predictions...")
-        predictions_stimuli = model.predict(dataloader_tst)
-        print(" - computed the predictions on {} samples".format(len(dataloader_tst.dataset)))
+        predictions_stimuli = model.predict(dataloader)
+        print(" - computed the predictions on {} samples".format(len(dataloader.dataset)))
 
         criterion_mse = nn.MSELoss(reduction='none')
         criterion_l1 = nn.L1Loss(reduction='none')
@@ -346,7 +368,7 @@ class ModelEvaluator:
                 loss_l1_crop.mean(),
                 loss_mse_crop.mean(),
             )
-        wandb.log({"predictions": wandb_table})
+        wandb.log({log_dict_prefix + "predictions": wandb_table})
 
     @staticmethod
     def plot_linear_model_dependencies(predictions_dir, name_prefix, data: LGNData, linear_model, num_save=16):
