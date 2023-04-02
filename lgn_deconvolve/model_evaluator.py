@@ -1,5 +1,6 @@
 import time
-from typing import Dict
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
 import kornia
 import wandb
@@ -70,60 +71,74 @@ class ModelEvaluator:
 
     @staticmethod
     def evaluate(dataloader: torch.utils.data.DataLoader, model: ModelBase, log_dict_prefix: str = 'test.') -> dict:
-        gold_stimuli = None
-        gold_labels = None
-        for batch_idx, batch in enumerate(dataloader):
-            data, labels = batch['stimulus'], batch['response']
-            if gold_stimuli is None:
-                gold_stimuli = data.numpy()
-                gold_labels = labels.numpy()
-            else:
-                gold_stimuli = np.concatenate((gold_stimuli, data.numpy()), axis=0)
-                gold_labels = np.concatenate((gold_labels, labels.numpy()), axis=0)
+        # Prepare criteria to measure with
+        criteria = ModelEvaluator.get_criteria(model.device)
 
         # Compute the predictions on testing dataset
-        print("Computing predictions...")
-        prediction_data = model.predict(dataloader)
-        print(" - computed the predictions on {} samples".format(len(dataloader.dataset)))
+        dict_losses = defaultdict(float)
+        num_samples = len(dataloader.dataset)
+        print("Computing evaluation for {} samples...".format(num_samples))
+        for batch_idx, batch in enumerate(dataloader):
+            # Load the data
+            stimuli, response = batch['stimulus'], batch['response']
+            stimuli = stimuli.to(model.device, dtype=torch.float)
+            response = response.to(model.device, dtype=torch.float)
+
+            # Compute the predictions
+            predictions = model.predict_batch(response)
+
+            # Compute the losses
+            dict_losses_ = ModelEvaluator.compute_losses(stimuli, predictions, model.device, criteria)
+            for key, value in dict_losses_.items():
+                dict_losses[key] += value
+
+        log_dict = {log_dict_prefix + key: value / num_samples for key, value in dict_losses.items()}
+
+        return log_dict
+
+    @staticmethod
+    def get_central_crop_transform(crop_size: int = 64):
+        transform_crop = transforms.Compose([
+            transforms.CenterCrop((crop_size, crop_size)),
+        ])
+        return transform_crop
+
+    @staticmethod
+    def get_criteria(device: torch.device) -> List[Tuple[str, nn.Module]]:
+        criteria = []
+        criterion_l1 = nn.L1Loss(reduction='none')
+        criteria.append(('L1', criterion_l1))
+        criterion_mse = nn.MSELoss(reduction='none')
+        criteria.append(('MSE', criterion_mse))
+        criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
+        criterion_ssim.to(device)
+        criteria.append(('SSIM', criterion_ssim))
+        criterion_ms_ssim = kornia.losses.MS_SSIMLoss(reduction='none')
+        criterion_ms_ssim.to(device)
+        criteria.append(('MSSSIM', criterion_ms_ssim))
+
+        return criteria
+
+    @staticmethod
+    def compute_losses(stimuli_batch: torch.FloatTensor, predictions_batch: torch.FloatTensor,
+                       device: torch.device, criteria: List[Tuple[str, nn.Module]] = None) \
+            -> Dict[str, float]:
+        if criteria is None:
+            criteria = ModelEvaluator.get_criteria(device)
 
         transform_crop = ModelEvaluator.get_central_crop_transform()
 
-        log_dict = {}
+        loss_dict = {}
+        for criterion_name, criterion in criteria:
+            loss = criterion(stimuli_batch, predictions_batch)
+            loss = loss.mean()
+            loss_dict[criterion_name] = loss.item()
 
-        # Compute the losses
-        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_stimuli, prediction_data)
-        print(" - L1:", loss_l1.mean().item())
-        log_dict[log_dict_prefix + 'L1'] = float(loss_l1.mean().item())
+            loss_crop = criterion(transform_crop(stimuli_batch), transform_crop(predictions_batch))
+            loss_crop = loss_crop.mean()
+            loss_dict[criterion_name + "_central"] = loss_crop.item()
 
-        loss_l1 = ModelEvaluator.evaluate_l1_whole(gold_stimuli, prediction_data, transform_crop)
-        print(" - L1 central:", loss_l1.mean().item())
-        log_dict[log_dict_prefix + 'L1_central'] = float(loss_l1.mean().item())
-
-        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_stimuli, prediction_data)
-        print(" - MSE:", loss_mse.mean().item())
-        log_dict[log_dict_prefix + 'MSE'] = float(loss_mse.mean().item())
-
-        loss_mse = ModelEvaluator.evaluate_mse_whole(gold_stimuli, prediction_data, transform_crop)
-        print(" - MSE central:", loss_mse.mean().item())
-        log_dict[log_dict_prefix + 'MSE_central'] = float(loss_mse.mean().item())
-
-        loss_ssim = ModelEvaluator.evaluate_ssim_whole(gold_stimuli, prediction_data)
-        print(" - SSIM :", loss_ssim.mean().item())
-        log_dict[log_dict_prefix + 'SSIM'] = float(loss_ssim.mean().item())
-
-        loss_ssim = ModelEvaluator.evaluate_ssim_whole(gold_stimuli, prediction_data, transform_crop)
-        print(" - SSIM central:", loss_ssim.mean().item())
-        log_dict[log_dict_prefix + 'SSIM_central'] = float(loss_ssim.mean().item())
-
-        loss_msssim = ModelEvaluator.evaluate_msssim_whole(gold_stimuli, prediction_data)
-        print(" - MSSSIM :", loss_msssim.mean().item())
-        log_dict[log_dict_prefix + 'MSSSIM'] = float(loss_msssim.mean().item())
-
-        loss_msssim = ModelEvaluator.evaluate_msssim_whole(gold_stimuli, prediction_data, transform_crop)
-        print(" - MSSSIM central:", loss_msssim.mean().item())
-        log_dict[log_dict_prefix + 'MSSSIM_central'] = float(loss_msssim.mean().item())
-
-        return log_dict
+        return loss_dict
 
     @staticmethod
     def save_filters(filters_dir, name_prefix, weights, biases):
@@ -213,41 +228,6 @@ class ModelEvaluator:
             plt.close()
 
     @staticmethod
-    def get_central_crop_transform(crop_size: int = 64):
-        transform_crop = transforms.Compose([
-            transforms.CenterCrop((crop_size, crop_size)),
-        ])
-        return transform_crop
-
-    @staticmethod
-    def compute_losses(data_stimulus, predictions, device: torch.device) -> Dict[str, float]:
-        criterions = []
-        criterion_l1 = nn.L1Loss(reduction='none')
-        criterions.append(('L1', criterion_l1))
-        criterion_mse = nn.MSELoss(reduction='none')
-        criterions.append(('MSE', criterion_mse))
-        criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
-        criterion_ssim.to(device)
-        criterions.append(('SSIM', criterion_ssim))
-        criterion_ms_ssim = kornia.losses.MS_SSIMLoss(reduction='none')
-        criterion_ms_ssim.to(device)
-        criterions.append(('MS_SSIM', criterion_ms_ssim))
-
-        transform_crop = ModelEvaluator.get_central_crop_transform()
-
-        loss_dict = {}
-        for criterion_name, criterion in criterions:
-            loss = criterion(data_stimulus, predictions)
-            loss = loss.mean()
-            loss_dict[criterion_name] = loss.item()
-
-            loss = criterion(transform_crop(data_stimulus), transform_crop(predictions))
-            loss = loss.mean()
-            loss_dict[criterion_name + "_central"] = loss.item()
-
-        return loss_dict
-
-    @staticmethod
     def save_outputs(predictions_dir, name_prefix, data, model, num_save=16):
         os.makedirs(predictions_dir, exist_ok=True)
         print("predictions_dir", predictions_dir)
@@ -325,7 +305,7 @@ class ModelEvaluator:
 
         # Compute the predictions on testing dataset
         print("Computing predictions...")
-        predictions_stimuli = model.predict(dataloader)
+        prediction_stimuli_torch = model.predict(dataloader).detach().cpu()
         print(" - computed the predictions on {} samples".format(len(dataloader.dataset)))
 
         criterion_mse = nn.MSELoss(reduction='none')
@@ -341,27 +321,26 @@ class ModelEvaluator:
                    ]
         wandb_table = wandb.Table(columns=columns)
 
-        for response_idx, prediction_stimuli in enumerate(predictions_stimuli):
+        for response_idx, prediction_stimulus_torch in enumerate(prediction_stimuli_torch):
             if response_idx >= num_save:
                 break
-            prediction_stimuli = np.squeeze(prediction_stimuli)
 
             gold_stimulus_torch = torch.from_numpy(gold_stimuli[response_idx]).squeeze()
             gold_stimulus_torch_crop = transform_crop(gold_stimulus_torch)
-            prediction_stimuli_torch = torch.from_numpy(prediction_stimuli).squeeze()
-            prediction_stimuli_torch_crop = transform_crop(prediction_stimuli_torch)
+            prediction_stimulus_torch = prediction_stimulus_torch.squeeze()
+            prediction_stimulus_torch_crop = transform_crop(prediction_stimulus_torch)
 
-            loss_mse = criterion_mse(gold_stimulus_torch, prediction_stimuli_torch)
-            loss_mse_crop = criterion_mse(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
-            loss_l1 = criterion_l1(gold_stimulus_torch, prediction_stimuli_torch)
-            loss_l1_crop = criterion_l1(gold_stimulus_torch_crop, prediction_stimuli_torch_crop)
+            loss_mse = criterion_mse(gold_stimulus_torch, prediction_stimulus_torch)
+            loss_mse_crop = criterion_mse(gold_stimulus_torch_crop, prediction_stimulus_torch_crop)
+            loss_l1 = criterion_l1(gold_stimulus_torch, prediction_stimulus_torch)
+            loss_l1_crop = criterion_l1(gold_stimulus_torch_crop, prediction_stimulus_torch_crop)
 
             wandb_table.add_data(
                 response_idx,
                 wandb.Image(gold_stimulus_torch.numpy()),
                 wandb.Image(gold_stimulus_torch_crop.numpy()),
-                wandb.Image(prediction_stimuli_torch.numpy()),
-                wandb.Image(prediction_stimuli_torch_crop.numpy()),
+                wandb.Image(prediction_stimulus_torch.numpy()),
+                wandb.Image(prediction_stimulus_torch_crop.numpy()),
                 wandb.Image(loss_l1.numpy()),
                 wandb.Image(loss_mse.numpy()),
                 wandb.Image(loss_l1_crop.numpy()),

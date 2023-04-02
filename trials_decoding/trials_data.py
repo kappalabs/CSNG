@@ -83,6 +83,8 @@ class TrialsData:
                 sample_dict['V1_Inh_L2/3'],
             ])  # 4 x 24000
             sample_stimulus = sample_dict['stimulus']  # 110 x 110
+            # Add channels dimension
+            sample_stimulus = np.expand_dims(sample_stimulus, axis=0)  # 1 x 110 x 110
 
             if sample_info in keys_train:
                 self.dataset_train['response'].append(sample_response)

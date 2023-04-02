@@ -107,6 +107,8 @@ class ConvolutionalNetworkModel(ModelBase):
         transform_crop = None
         # transform_crop = ModelEvaluator.get_central_crop_transform()
 
+        eval_criteria = ModelEvaluator.get_criteria(self.device)
+
         print("Starting Training Loop...")
         # For each epoch
         for epoch in range(self.num_epochs_curr + 1, self.num_epochs + 1):
@@ -115,19 +117,18 @@ class ConvolutionalNetworkModel(ModelBase):
 
             # For each batch in the dataloader
             for i, data in enumerate(dataloader_trn, 0):
-                data_stimulus = data['stimulus'].to(self.device, dtype=torch.float)  # type: torch.Tensor
-                data_stimulus.unsqueeze_(1)
-                data_response = data['response'].to(self.device, dtype=torch.float)
+                stimuli = data['stimulus'].to(self.device, dtype=torch.float)
+                responses = data['response'].to(self.device, dtype=torch.float)
 
                 # Prepare the network
                 optimizer.zero_grad()
                 # Compute the predictions
-                predictions = model(data_response)
+                predictions = model(responses)
                 if transform_crop is not None:
-                    data_stimulus = transform_crop(data_stimulus)
+                    stimuli = transform_crop(stimuli)
                     predictions = transform_crop(predictions)
                 # Compute the loss
-                loss = self.criterion(data_stimulus, predictions)
+                loss = self.criterion(stimuli, predictions)
                 if len(loss.shape) == 4:
                     epoch_loss += loss.mean(dim=1).mean(dim=1).mean(dim=1).sum()
                 if len(loss.shape) == 3:
@@ -138,7 +139,7 @@ class ConvolutionalNetworkModel(ModelBase):
                 optimizer.step()
 
                 # Compute all the losses
-                dict_losses_ = ModelEvaluator.compute_losses(data_stimulus, predictions, self.device)
+                dict_losses_ = ModelEvaluator.compute_losses(stimuli, predictions, self.device, eval_criteria)
                 for key, value in dict_losses_.items():
                     dict_losses[key] += value
 
@@ -197,7 +198,18 @@ class ConvolutionalNetworkModel(ModelBase):
                 self.best_loss = loss
                 self.save_model()
 
-    def predict(self, dataloader: torch.utils.data.DataLoader):
+    def predict_batch(self, batch: torch.FloatTensor) -> torch.FloatTensor:
+        super().predict_batch(batch)
+
+        self.model.eval()
+
+        data_response = batch.to(self.device, dtype=torch.float)
+
+        prediction = self.model(data_response).detach()
+
+        return prediction
+
+    def predict(self, dataloader: torch.utils.data.DataLoader) -> torch.FloatTensor:
         super().predict(dataloader)
 
         self.model.eval()
@@ -207,17 +219,17 @@ class ConvolutionalNetworkModel(ModelBase):
         # For each batch in the dataloader
         predictions = None
         for i, data in enumerate(dataloader, 0):
-            data_response = data['response'].to(self.device, dtype=torch.float)
+            data_response = data['response']
 
-            prediction = self.model(data_response).detach().cpu().numpy()
+            prediction = self.predict_batch(data_response)
+
+            # Concatenate the predictions
             if predictions is None:
                 predictions = prediction
             else:
-                predictions = np.concatenate([predictions, prediction], axis=0)
+                predictions = torch.cat((predictions, prediction), dim=0)
 
-        prediction = predictions
-
-        return prediction
+        return predictions
 
     def get_kernel(self) -> Tuple[np.ndarray, np.ndarray]:
         if self.model is None:

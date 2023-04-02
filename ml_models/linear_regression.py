@@ -60,26 +60,43 @@ class LinearRegressionModel(ModelBase):
         # Save the fitted model
         self.save_model()
 
-    def predict(self, dataloader: torch.utils.data.DataLoader):
+    def predict_batch(self, batch: torch.FloatTensor) -> torch.FloatTensor:
+        super().predict_batch(batch)
+
+        data_response = batch.detach().cpu().numpy()
+
+        flattened_prediction = self.model.predict(LinearRegressionModel.flatten(data_response))
+        predictions = flattened_prediction.reshape((-1, *self.stimuli_shape))
+
+        # Create torch from numpy
+        predictions = torch.from_numpy(predictions).to(self.device, dtype=torch.float)
+
+        # Insert channel dimension if necessary
+        if len(predictions.shape) == 3:
+            predictions = predictions.unsqueeze(1)
+
+        return predictions
+
+    def predict(self, dataloader: torch.utils.data.DataLoader) -> torch.FloatTensor:
         super().predict(dataloader)
+
+        print("Received loader with", len(dataloader.dataset), "samples")
 
         # For each batch in the dataloader
         predictions = None
         for batch_idx, batch in enumerate(dataloader):
             # Convert torch tensor to numpy array
-            data_response = batch['response'].detach().cpu().numpy()
+            data_response = batch['response']
 
-            flattened_prediction = self.model.predict(LinearRegressionModel.flatten(data_response))
-            prediction = flattened_prediction.reshape((-1, *self.stimuli_shape))
+            prediction = self.predict_batch(data_response)
 
+            # Concatenate the predictions
             if predictions is None:
                 predictions = prediction
             else:
-                predictions = np.concatenate([predictions, prediction], axis=0)
+                predictions = torch.cat((predictions, prediction), dim=0)
 
-        prediction = predictions
-
-        return prediction
+        return predictions
 
     def get_kernel(self) -> Tuple[np.ndarray, np.ndarray]:
         if self.model is None:

@@ -33,8 +33,8 @@ class ModelBase(abc.ABC):
 
         print("Saved model to {}".format(self.checkpoint_filepath))
 
-        wandb.save(self.checkpoint_filepath)
-        print("Saved model to wandb")
+        # wandb.save(self.checkpoint_filepath)
+        # print("Saved model to wandb")
 
     def load_model_data(self) -> dict:
         if not os.path.isfile(self.checkpoint_filepath):
@@ -53,7 +53,13 @@ class ModelBase(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def predict(self, dataloader: torch.utils.data.DataLoader):
+    def predict_batch(self, batch: torch.FloatTensor) -> torch.FloatTensor:
+        if self.model is None:
+            raise Exception("Model not trained")
+        pass
+
+    @abc.abstractmethod
+    def predict(self, dataloader: torch.utils.data.DataLoader) -> torch.FloatTensor:
         if self.model is None:
             raise Exception("Model not trained")
         pass
