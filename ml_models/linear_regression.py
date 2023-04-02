@@ -30,9 +30,10 @@ class LinearRegressionModel(ModelBase):
     def load_model(self):
         data = super().load_model_data()
 
-        self.model = data['model']
-        self.wandb_run_id = data['wandb_run_id']
-        self.num_epochs_curr = data['num_epochs']
+        if data is not None:
+            self.model = data['model']
+            self.wandb_run_id = data['wandb_run_id']
+            self.num_epochs_curr = data['num_epochs']
 
     def train(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader):
         # Set up the model
