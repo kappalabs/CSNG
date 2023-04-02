@@ -31,7 +31,7 @@ def get_configuration():
         "model_loss": "L1",
         "model_name": 'dummy.pth',
         "clear_progress": True,
-        "evaluate": True,
+        "evaluate": False,
     }
 
     parser = argparse.ArgumentParser()
