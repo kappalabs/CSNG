@@ -94,6 +94,8 @@ class ConvolutionalNetworkModel(ModelBase):
 
         model, best_loss, best_epoch = copy.deepcopy(self.model), float("inf"), 0
 
+        model.to(self.device)
+
         num_samples = len(dataloader_trn.dataset)
         num_batches_in_epoch = num_samples / self.batch_size
 
@@ -199,6 +201,7 @@ class ConvolutionalNetworkModel(ModelBase):
     def predict(self, dataloader: torch.utils.data.DataLoader):
         super().predict(dataloader)
 
+        self.model.to(self.device)
         self.model.eval()
 
         print("Received loader with", len(dataloader.dataset), "samples")
