@@ -131,11 +131,11 @@ class ModelEvaluator:
         loss_dict = {}
         for criterion_name, criterion in criteria:
             loss = criterion(stimuli_batch, predictions_batch)
-            loss = loss.mean()
+            loss = loss.sum()
             loss_dict[criterion_name] = loss.item()
 
             loss_crop = criterion(transform_crop(stimuli_batch), transform_crop(predictions_batch))
-            loss_crop = loss_crop.mean()
+            loss_crop = loss_crop.sum()
             loss_dict[criterion_name + "_central"] = loss_crop.item()
 
         return loss_dict
