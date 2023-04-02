@@ -220,15 +220,17 @@ class ModelEvaluator:
         return transform_crop
 
     @staticmethod
-    def compute_losses(data_stimulus, predictions) -> Dict[str, float]:
+    def compute_losses(data_stimulus, predictions, device: torch.device) -> Dict[str, float]:
         criterions = []
         criterion_l1 = nn.L1Loss(reduction='none')
         criterions.append(('L1', criterion_l1))
         criterion_mse = nn.MSELoss(reduction='none')
         criterions.append(('MSE', criterion_mse))
         criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
+        criterion_ssim.to(device)
         criterions.append(('SSIM', criterion_ssim))
         criterion_ms_ssim = kornia.losses.MS_SSIMLoss(reduction='none')
+        criterion_ms_ssim.to(device)
         criterions.append(('MS_SSIM', criterion_ms_ssim))
 
         transform_crop = ModelEvaluator.get_central_crop_transform()

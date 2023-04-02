@@ -35,8 +35,10 @@ class ConvolutionalNetworkModel(ModelBase):
             self.criterion = nn.MSELoss(reduction='none')
         elif self.model_loss == 'SSIM':
             self.criterion = kornia.losses.SSIMLoss(window_size=3, reduction='none')
+            self.criterion.to(self.device)
         elif self.model_loss == 'MSSSIM':
             self.criterion = kornia.losses.MS_SSIMLoss(reduction='none')
+            self.criterion.to(self.device)
         else:
             raise Exception("Unknown loss function: " + self.model_loss)
 
@@ -136,7 +138,7 @@ class ConvolutionalNetworkModel(ModelBase):
                 optimizer.step()
 
                 # Compute all the losses
-                dict_losses_ = ModelEvaluator.compute_losses(data_stimulus, predictions)
+                dict_losses_ = ModelEvaluator.compute_losses(data_stimulus, predictions, self.device)
                 for key, value in dict_losses_.items():
                     dict_losses[key] += value
 
