@@ -14,7 +14,6 @@ from typing import Tuple
 from collections import defaultdict
 from ml_models.model_base import ModelBase
 from lgn_deconvolve.model_evaluator import ModelEvaluator
-from ml_models.conv_models.conv_model_base import CNNModelBase
 
 
 class ConvolutionalNetworkModel(ModelBase):
@@ -93,8 +92,6 @@ class ConvolutionalNetworkModel(ModelBase):
         self.model.train()
 
         model, best_loss, best_epoch = copy.deepcopy(self.model), float("inf"), 0
-
-        model.to(self.device)
 
         num_samples = len(dataloader_trn.dataset)
         num_batches_in_epoch = num_samples / self.batch_size
@@ -201,7 +198,6 @@ class ConvolutionalNetworkModel(ModelBase):
     def predict(self, dataloader: torch.utils.data.DataLoader):
         super().predict(dataloader)
 
-        self.model.to(self.device)
         self.model.eval()
 
         print("Received loader with", len(dataloader.dataset), "samples")
