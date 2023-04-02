@@ -13,7 +13,7 @@ class LinearRegressionModel(ModelBase):
                  data_stimuli_shape: tuple, data_response_shape: tuple):
         super().__init__(checkpoint_filepath, device, config, data_stimuli_shape, data_response_shape)
 
-        self.load_model_data()
+        self.load_model()
 
     @staticmethod
     def flatten(data):
