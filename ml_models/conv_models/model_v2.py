@@ -63,6 +63,6 @@ class CNNModel(CNNModelBase):
 
         x = self.deconv(x)
 
-        x = nn.functional.interpolate(x, size=self.stimuli_shape, mode='bilinear', align_corners=False)
+        x = nn.functional.interpolate(x, size=self.stimuli_shape[-2:], mode='bilinear', align_corners=False)
 
         return x

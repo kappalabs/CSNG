@@ -91,7 +91,7 @@ class CNNModel(CNNModelBase):
         # print("x.shape compressed resized", x.shape)
         out_img = self.main(x)
         # print("out_img.shape", out_img.shape)
-        out_img = nn.functional.interpolate(out_img, size=self.stimuli_shape, mode='bilinear', align_corners=False)
+        out_img = nn.functional.interpolate(out_img, size=self.stimuli_shape[-2:], mode='bilinear', align_corners=False)
         # print("out_img.shape resized", out_img.shape)
 
         return out_img
