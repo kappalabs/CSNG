@@ -31,6 +31,7 @@ def get_configuration():
         "model_loss": "L1",
         "model_name": 'dummy.pth',
         "clear_progress": True,
+        "evaluate": True,
     }
 
     parser = argparse.ArgumentParser()
@@ -51,6 +52,7 @@ def get_configuration():
     parser.add_argument('--model_loss', type=str, default=default_config['model_loss'], help="L1/MSE/SSIM/MSSSIM/PSNR")
     parser.add_argument('--model_name', type=str, default=default_config['model_name'])
     parser.add_argument('--clear_progress', default=default_config['clear_progress'], action='store_true')
+    parser.add_argument('--evaluate', default=default_config['evaluate'], action='store_true')
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -109,7 +111,9 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
         raise NotImplementedError("Model type {} is not supported!".format(config['model_type']))
 
     # Get the info from loaded model
-    wandb_run_id = model.wandb_run_id
+    wandb_run_id = None
+    if not config['clear_progress'] and not config['evaluate']:
+        wandb_run_id = model.wandb_run_id
 
     return model, dataloader_trn, dataloader_val, dataloader_tst, wandb_run_id
 
@@ -120,14 +124,14 @@ def train(config: dict, device: torch.device):
         load_checkpoint(config, checkpoint_filepath, device)  # type: ModelBase
 
     # Initialize W&b
-    resume = wandb_run_id is not None
-    wandb.init(project=config['project_name'], id=wandb_run_id, resume=resume)
+    wandb.init(project=config['project_name'], id=wandb_run_id, resume='allow')
     wandb.config.update(config)
     checkpoint_filepath = os.path.join(project_dir_path, "checkpoints", config['model_type'], wandb.run.name + '.pth')
     model.checkpoint_filepath = checkpoint_filepath
 
-    # Train the model
-    model.train(dataloader_trn, dataloader_val)
+    if not config['evaluate']:
+        # Train the model
+        model.train(dataloader_trn, dataloader_val)
 
     # Evaluate the model
     print("Evaluating LR (#train {}) model {}".format(config['dataset_limit_train'], config['model_type']))
