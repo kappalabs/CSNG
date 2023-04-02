@@ -38,14 +38,20 @@ class TrialsData:
         # Number of all available samples
         self.num_all_data = len(self.dataset)
 
+        def get_image_name(sample_info: str):
+            import re
+            image_name = re.sub(r'.*image_location', '', sample_info)
+            image_name = re.sub(r'.*/', '', image_name)
+            image_name = re.sub(r'\'.*', '', image_name)
+
+            return image_name
+
         if self.debug_save_images:
             import re
             from PIL import Image
             for sample_info, sample_dict in self.dataset.items():
                 sample_stimulus = sample_dict['stimulus']
-                image_name = re.sub(r'.*image_location', '', sample_info)
-                image_name = re.sub(r'.*/', '', image_name)
-                image_name = re.sub(r'\'.*', '', image_name)
+                image_name = get_image_name(sample_info)
 
                 img_np = sample_stimulus
                 img_np = np.array(img_np, dtype=np.uint8)
@@ -68,10 +74,14 @@ class TrialsData:
             self.limit_test = self.num_test_data
 
         # Split the data
-        keys = sorted(list(self.dataset.keys()))
+        original_keys = list(self.dataset.keys())
+        image_names = sorted(list(set(map(get_image_name, original_keys))))
+        num_train_keys = int(len(image_names) * self.train_part)
+        num_val_keys = int(len(image_names) * self.val_part)
         np.random.seed(self.seed)
-        keys_train = set(np.random.choice(keys, self.num_train_data, replace=False))
-        keys_val = set(np.random.choice(list(set(keys) - keys_train), self.num_val_data, replace=False))
+        keys_train = set(np.random.choice(image_names, num_train_keys, replace=False))
+        remaining_keys = sorted(list(set(image_names) - keys_train))
+        keys_val = set(np.random.choice(remaining_keys, num_val_keys, replace=False))
         self.dataset_train = {'response': [], 'stimulus': []}
         self.dataset_val = {'response': [], 'stimulus': []}
         self.dataset_test = {'response': [], 'stimulus': []}
@@ -86,10 +96,13 @@ class TrialsData:
             # Add channels dimension
             sample_stimulus = np.expand_dims(sample_stimulus, axis=0)  # 1 x 110 x 110
 
-            if sample_info in keys_train:
+            # Get the image name of the sample
+            sample_filename = get_image_name(sample_info)
+
+            if sample_filename in keys_train:
                 self.dataset_train['response'].append(sample_response)
                 self.dataset_train['stimulus'].append(sample_stimulus)
-            elif sample_info in keys_val:
+            elif sample_filename in keys_val:
                 self.dataset_val['response'].append(sample_response)
                 self.dataset_val['stimulus'].append(sample_stimulus)
             else:
