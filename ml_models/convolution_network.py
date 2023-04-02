@@ -26,6 +26,7 @@ class ConvolutionalNetworkModel(ModelBase):
 
         self.model_loss = config['model_loss']
         self.best_loss = float("inf")
+        self.best_epoch = 0
         self.epoch = 0
 
         self.criterion = None
@@ -53,6 +54,7 @@ class ConvolutionalNetworkModel(ModelBase):
         data = {
             'network': self.model.state_dict(),
             'best_loss': self.best_loss,
+            'best_epoch': self.best_epoch,
             'epoch': self.epoch,
             'wandb_run_id': self.wandb_run_id,
             'num_epochs': self.num_epochs_curr,
@@ -74,6 +76,7 @@ class ConvolutionalNetworkModel(ModelBase):
         if data is not None:
             self.model.load_state_dict(data['network'])
             self.best_loss = data['best_loss']
+            self.best_epoch = data['best_epoch']
             self.epoch = data['epoch']
             self.wandb_run_id = data['wandb_run_id']
             self.num_epochs_curr = data['num_epochs']
@@ -147,16 +150,21 @@ class ConvolutionalNetworkModel(ModelBase):
                 if i < num_batches_in_epoch - 1:
                     print("   - epoch {}/{}, batch {}/{:.1f}: {} loss {}"
                           .format(epoch, self.num_epochs, i + 1, num_batches_in_epoch, self.model_loss, loss.item()))
-                if loss.item() < best_loss:
-                    best_loss = loss.item()
-                    best_epoch = epoch
+
+            # Make evaluation on the validation set
+            evaluate_dict = ModelEvaluator.evaluate(dataloader_val, self, log_dict_prefix='val.')
+            outputs_dict = ModelEvaluator.log_outputs(dataloader_val, self, log_dict_prefix='val.')
+
+            # Update the best loss & model
+            validation_loss = evaluate_dict['val.{}'.format(self.model_loss)]
 
             # Save the model
-            if best_loss < self.best_loss:
+            if validation_loss < self.best_loss:
                 print(" - new loss {} is better than previous {} -> saving the new model..."
-                      .format(best_loss, self.best_loss))
+                      .format(validation_loss, self.best_loss))
                 self.model = model
-                self.best_loss = best_loss
+                self.best_loss = validation_loss
+                self.best_epoch = epoch
                 self.save_model()
 
             # Log the progress
@@ -167,14 +175,12 @@ class ConvolutionalNetworkModel(ModelBase):
             wandb.log({
                 "epoch": epoch,
                 "train.loss": epoch_loss.item(),
-                "train.best_loss": best_loss,
-                "train.best_epoch": best_epoch,
+                "train.best_loss": self.best_loss,
+                "train.best_epoch": self.best_epoch,
                 "train.learning_rate": scheduler.get_last_lr(),
             }, commit=False)
             wandb.log(dict_losses, commit=False)
-            evaluate_dict = ModelEvaluator.evaluate(dataloader_val, self, log_dict_prefix='val.')
             wandb.log(evaluate_dict, commit=False)
-            outputs_dict = ModelEvaluator.log_outputs(dataloader_val, self, log_dict_prefix='val.')
             wandb.log(outputs_dict, commit=True)
 
             # Adjust the learning rate
@@ -182,7 +188,7 @@ class ConvolutionalNetworkModel(ModelBase):
 
             self.num_epochs_curr = epoch
 
-        return model, best_loss, best_epoch
+        return model, self.best_loss, self.best_epoch
 
     def train(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader,
               continue_training=False):
