@@ -69,10 +69,10 @@ class ModelEvaluator:
         return loss_ssim
 
     @staticmethod
-    def evaluate(dataloader_tst: torch.utils.data.DataLoader, model: ModelBase, log_dict_prefix: str = 'test.') -> dict:
+    def evaluate(dataloader: torch.utils.data.DataLoader, model: ModelBase, log_dict_prefix: str = 'test.') -> dict:
         gold_stimuli = None
         gold_labels = None
-        for batch_idx, batch in enumerate(dataloader_tst):
+        for batch_idx, batch in enumerate(dataloader):
             data, labels = batch['stimulus'], batch['response']
             if gold_stimuli is None:
                 gold_stimuli = data.numpy()
@@ -83,8 +83,8 @@ class ModelEvaluator:
 
         # Compute the predictions on testing dataset
         print("Computing predictions...")
-        prediction_data = model.predict(dataloader_tst)
-        print(" - computed the predictions on {} samples".format(len(dataloader_tst.dataset)))
+        prediction_data = model.predict(dataloader)
+        print(" - computed the predictions on {} samples".format(len(dataloader.dataset)))
 
         transform_crop = ModelEvaluator.get_central_crop_transform()
 
