@@ -158,7 +158,7 @@ class ConvolutionalNetworkModel(ModelBase):
             # Update the best loss & model
             validation_loss = evaluate_dict['val.{}'.format(self.model_loss)]
 
-            # Save the model
+            # Save the model based on the validation loss
             if validation_loss < self.best_loss:
                 print(" - new loss {} is better than previous {} -> saving the new model..."
                       .format(validation_loss, self.best_loss))
@@ -188,21 +188,13 @@ class ConvolutionalNetworkModel(ModelBase):
 
             self.num_epochs_curr = epoch
 
-        return model, self.best_loss, self.best_epoch
-
     def train(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader,
               continue_training=False):
 
         # Train the network if not available
         if not os.path.exists(self.checkpoint_filepath) or continue_training:
             print("Training new network...")
-            model, loss, epoch = self.fit(dataloader_trn, dataloader_val)
-
-            if loss < self.best_loss:
-                print(" - new loss {} is better than previous {} -> saving the new model...".format(loss, self.best_loss))
-                self.model = model
-                self.best_loss = loss
-                self.save_model()
+            self.fit(dataloader_trn, dataloader_val)
 
     def predict_batch(self, batch: torch.FloatTensor) -> torch.FloatTensor:
         super().predict_batch(batch)
