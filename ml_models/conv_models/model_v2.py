@@ -18,8 +18,10 @@ class CNNModel(CNNModelBase):
 
         self.fc1 = nn.Linear(self.number_inputs, self.compression_fc_size)
         self.bn1 = nn.BatchNorm1d(self.compression_fc_size)
+        self.dropout1 = nn.Dropout(0.5)
         self.fc2 = nn.Linear(self.compression_fc_size, self.output_fc_channels * self.output_fc_side_size ** 2)
         self.bn2 = nn.BatchNorm1d(self.output_fc_channels * self.output_fc_side_size ** 2)
+        self.dropout2 = nn.Dropout(0.5)
 
         ngf = 32
         number_output_channels = 1
@@ -55,9 +57,11 @@ class CNNModel(CNNModelBase):
         x = self.fc1(x)
         x = self.bn1(x)
         x = nn.functional.relu(x)
+        x = self.dropout1(x)
         x = self.fc2(x)
         x = self.bn2(x)
         x = nn.functional.relu(x)
+        x = self.dropout2(x)
 
         x = x.view(-1, self.output_fc_channels, self.output_fc_side_size, self.output_fc_side_size)
 
