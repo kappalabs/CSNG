@@ -33,6 +33,7 @@ def get_configuration():
         "clear_progress": True,
         "evaluate": False,
         "dropout": 0.5,
+        "gpu": 0,
     }
 
     parser = argparse.ArgumentParser()
@@ -55,6 +56,7 @@ def get_configuration():
     parser.add_argument('--clear_progress', default=default_config['clear_progress'], action='store_true')
     parser.add_argument('--evaluate', default=default_config['evaluate'], action='store_true')
     parser.add_argument('--dropout', type=float, default=default_config['dropout'])
+    parser.add_argument('--gpu', type=int, default=default_config['gpu'], help="GPU ID to use (default: 0)")
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -155,8 +157,10 @@ def main():
     config = get_configuration()
 
     # Get running device
-    # device = torch.device(0)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available() and config['gpu'] >= 0:
+        device = torch.device(config['gpu'])
+    else:
+        device = torch.device('cpu')
     print("device:", device)
     logger.info('Device is {}'.format(device))
 
