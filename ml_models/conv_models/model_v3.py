@@ -12,56 +12,53 @@ class CNNModel(CNNModelBase):
         self.number_inputs = int(np.prod(response_shape))
 
         self.compression_fc_size = 512
-        self.output_fc_channels = 64
-        self.output_fc_side_size = 8
+        self.output_fc_channels = 1
+        self.output_fc_side_size = 110
 
-        self.fc1 = nn.Linear(self.number_inputs, self.compression_fc_size)
-        self.bn1 = nn.BatchNorm1d(self.compression_fc_size)
-        self.dropout1 = nn.Dropout(0.5)
-        self.fc2 = nn.Linear(self.compression_fc_size, self.output_fc_channels * self.output_fc_side_size ** 2)
-        self.bn2 = nn.BatchNorm1d(self.output_fc_channels * self.output_fc_side_size ** 2)
-        self.dropout2 = nn.Dropout(0.5)
+        self.intermediate = nn.Sequential(
+            nn.Linear(self.number_inputs, self.compression_fc_size),
+            nn.BatchNorm1d(self.compression_fc_size),
+            nn.ReLU(True),
+            nn.Dropout(self.dropout),
+
+            nn.Linear(self.compression_fc_size, self.output_fc_channels * self.output_fc_side_size ** 2),
+            nn.BatchNorm1d(self.output_fc_channels * self.output_fc_side_size ** 2),
+            nn.ReLU(True),
+            nn.Dropout(self.dropout),
+        )
 
         ngf = 32
         number_output_channels = 1
 
         self.decode = nn.Sequential(
             nn.ConvTranspose2d(in_channels=self.output_fc_channels, out_channels=ngf * 16, kernel_size=3, stride=1,
-                               padding=0),
+                               padding=1),
             nn.BatchNorm2d(ngf * 16),
             nn.ReLU(True),
             # state size. (ngf*8) x 4 x 4
-            nn.ConvTranspose2d(ngf * 16, ngf * 8, 3, 2, 1),
+            nn.ConvTranspose2d(ngf * 16, ngf * 8, 3, 1, 1),
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
             # state size. (ngf*4) x 8 x 8
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 3, 2, 1),
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 3, 1, 1),
             nn.BatchNorm2d(ngf * 4),
             nn.ReLU(True),
             # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, 3, 2, 1),
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 3, 1, 1),
             nn.BatchNorm2d(ngf * 2),
             nn.ReLU(True),
             # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d(ngf * 2, ngf, 3, 2, 1),
+            nn.ConvTranspose2d(ngf * 2, ngf, 3, 1, 1),
             nn.BatchNorm2d(ngf),
             nn.ReLU(True),
             # state size. (ngf) x 32 x 32
-            nn.ConvTranspose2d(ngf, number_output_channels, 3, 2, 1),
+            nn.ConvTranspose2d(ngf, number_output_channels, 3, 1, 1),
             nn.Sigmoid()
             # state size. (number_outputs) x 64 x 64
         )
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.bn1(x)
-        x = nn.functional.relu(x)
-        x = self.dropout1(x)
-        x = self.fc2(x)
-        x = self.bn2(x)
-        x = nn.functional.relu(x)
-        x = self.dropout2(x)
-
+        x = self.intermediate(x)
         x = x.view(-1, self.output_fc_channels, self.output_fc_side_size, self.output_fc_side_size)
 
         x = self.decode(x)

@@ -1,27 +1,13 @@
-import os
-import copy
-from collections import defaultdict
-
-import wandb
-import torch
-import kornia.losses
-import torch.utils.data
-
 import numpy as np
 import torch.nn as nn
-import torch.optim as optim
 
-from typing import Tuple
-
-from lgn_deconvolve.model_evaluator import ModelEvaluator
-from ml_models.model_base import ModelBase
 from ml_models.conv_models.conv_model_base import CNNModelBase
 
 
 class CNNModel(CNNModelBase):
 
-    def __init__(self, stimuli_shape, response_shape, num_filters=1):
-        super().__init__(stimuli_shape, response_shape)
+    def __init__(self, stimuli_shape, response_shape, dropout: float):
+        super().__init__(stimuli_shape, response_shape, dropout)
 
         ngf = 32
         self.max_pool_kernel_size = 1
@@ -47,7 +33,7 @@ class CNNModel(CNNModelBase):
         # self.compressed_side_size = 1
         # self.compressed_channels = 60_000
 
-        self.main = nn.Sequential(
+        self.decode = nn.Sequential(
             # input is Z, going into a convolution
             nn.ConvTranspose2d(in_channels=self.compressed_channels, out_channels=ngf * 16, kernel_size=3, stride=1,
                                padding=0),
@@ -89,7 +75,7 @@ class CNNModel(CNNModelBase):
         # print("x.shape compressed", x.shape)
         x = x.view(x.shape[0], self.compressed_channels, self.compressed_side_size, self.compressed_side_size)
         # print("x.shape compressed resized", x.shape)
-        out_img = self.main(x)
+        out_img = self.decode(x)
         # print("out_img.shape", out_img.shape)
         out_img = nn.functional.interpolate(out_img, size=self.stimuli_shape[-2:], mode='bilinear', align_corners=False)
         # print("out_img.shape resized", out_img.shape)

@@ -17,6 +17,8 @@ class ModelBase(abc.ABC):
         self.learning_rate = config['learning_rate']
         self.num_epochs = config['num_epochs']
         self.batch_size = config['batch_size']
+        self.version = config['model_version']
+        self.dropout = config['dropout']
 
         self.model = None
         self.wandb_run_id = None

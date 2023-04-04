@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from typing import Tuple
+from torchinfo import summary
 from collections import defaultdict
 from ml_models.model_base import ModelBase
 from lgn_deconvolve.model_evaluator import ModelEvaluator
@@ -19,10 +20,8 @@ from lgn_deconvolve.model_evaluator import ModelEvaluator
 class ConvolutionalNetworkModel(ModelBase):
 
     def __init__(self, checkpoint_filepath: str, device: torch.device, config: dict,
-                 data_stimuli_shape: tuple, data_response_shape: tuple, version: int = 1):
+                 data_stimuli_shape: tuple, data_response_shape: tuple):
         super().__init__(checkpoint_filepath, device, config, data_stimuli_shape, data_response_shape)
-
-        self.version = version
 
         self.model_loss = config['model_loss']
         self.best_loss = float("inf")
@@ -70,7 +69,7 @@ class ConvolutionalNetworkModel(ModelBase):
         # Define the network
         module_model = importlib.import_module("ml_models.conv_models.model_v{}".format(self.version))
         CNNModel = getattr(module_model, "CNNModel")
-        self.model = CNNModel(self.stimuli_shape, self.response_shape)
+        self.model = CNNModel(self.stimuli_shape, self.response_shape, self.dropout)
         self.model.to(self.device)
 
         if data is not None:
@@ -89,8 +88,6 @@ class ConvolutionalNetworkModel(ModelBase):
                     saved_version, self.version))
 
         print("printing the model summary (for debugging purposes)...")
-        from torchinfo import summary
-        # print(self.model)
         summary(self.model, input_size=(1, 60_000))
 
     def fit(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader):
