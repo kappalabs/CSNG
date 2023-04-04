@@ -32,6 +32,7 @@ def get_configuration():
         "model_name": 'dummy.pth',
         "clear_progress": True,
         "evaluate": False,
+        "dropout": 0.5,
     }
 
     parser = argparse.ArgumentParser()
@@ -53,6 +54,7 @@ def get_configuration():
     parser.add_argument('--model_name', type=str, default=default_config['model_name'])
     parser.add_argument('--clear_progress', default=default_config['clear_progress'], action='store_true')
     parser.add_argument('--evaluate', default=default_config['evaluate'], action='store_true')
+    parser.add_argument('--dropout', type=float, default=default_config['dropout'])
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -106,7 +108,7 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
                                    data.get_stimuli_shape, data.get_response_shape)
     elif config['model_type'] == 'convolution_network':
         model = ConvolutionalNetworkModel(checkpoint_filepath, device, config,
-                                          data.get_stimuli_shape, data.get_response_shape, config['model_version'])
+                                          data.get_stimuli_shape, data.get_response_shape)
     else:
         raise NotImplementedError("Model type {} is not supported!".format(config['model_type']))
 
