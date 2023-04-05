@@ -159,7 +159,7 @@ class ConvolutionalNetworkModel(ModelBase):
             if validation_loss < self.best_loss:
                 print(" - new loss {} is better than previous {} -> saving the new model..."
                       .format(validation_loss, self.best_loss))
-                self.model = model
+                self.model = copy.deepcopy(model)
                 self.best_loss = validation_loss
                 self.best_epoch = epoch
                 self.save_model()
