@@ -19,6 +19,7 @@ class ModelBase(abc.ABC):
         self.batch_size = config['batch_size']
         self.version = config['model_version']
         self.dropout = config['dropout']
+        self.optimizer = config['optimizer']
 
         self.model = None
         self.wandb_run_id = None

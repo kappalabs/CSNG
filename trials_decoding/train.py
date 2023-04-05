@@ -34,6 +34,7 @@ def get_configuration():
         "evaluate": False,
         "dropout": 0.5,
         "gpu": 0,
+        "optimizer": "adam",
     }
 
     parser = argparse.ArgumentParser()
@@ -57,6 +58,7 @@ def get_configuration():
     parser.add_argument('--evaluate', default=default_config['evaluate'], action='store_true')
     parser.add_argument('--dropout', type=float, default=default_config['dropout'])
     parser.add_argument('--gpu', type=int, default=default_config['gpu'], help="GPU ID to use (default: 0)")
+    parser.add_argument('--optimizer', type=str, default=default_config['optimizer'], help="adam/sgd")
 
     args = parser.parse_args()
     default_config.update(vars(args))

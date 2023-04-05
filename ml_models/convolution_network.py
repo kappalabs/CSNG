@@ -99,7 +99,12 @@ class ConvolutionalNetworkModel(ModelBase):
         num_batches_in_epoch = num_samples / self.batch_size
 
         # criterion_mse = nn.MSELoss(reduction='none')
-        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+        if self.optimizer.lower() == 'sgd':
+            optimizer = optim.SGD(model.parameters(), lr=self.learning_rate, momentum=0.9, weight_decay=1e-4)
+        elif self.optimizer.lower() == 'adam':
+            optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+        else:
+            raise Exception("Unknown optimizer: " + self.optimizer)
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, threshold=0.0002, patience=3,
         #                                                  cooldown=4, verbose=True)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.num_epochs)
@@ -130,9 +135,9 @@ class ConvolutionalNetworkModel(ModelBase):
                 # Compute the loss
                 loss = self.criterion(stimuli, predictions)
                 if len(loss.shape) == 4:
-                    epoch_loss += loss.mean(dim=1).mean(dim=1).mean(dim=1).sum()
+                    epoch_loss += loss.detach().mean(dim=1).mean(dim=1).mean(dim=1).sum()
                 if len(loss.shape) == 3:
-                    epoch_loss += loss.mean(dim=1).mean(dim=1).sum()
+                    epoch_loss += loss.detach().mean(dim=1).mean(dim=1).sum()
                 loss = loss.mean()
                 # Back-propagate the loss
                 loss.backward()
