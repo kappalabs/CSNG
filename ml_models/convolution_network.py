@@ -148,7 +148,10 @@ class ConvolutionalNetworkModel(ModelBase):
                     print("   - epoch {}/{}, batch {}/{:.1f}: {} loss {}"
                           .format(epoch, self.num_epochs, i + 1, num_batches_in_epoch, self.model_loss, loss.item()))
 
-            # Make evaluation on the validation set
+            # Make evaluation on the validation set of the updated model
+            # NOTE: deepcopy is probably not necessary, but it's safer for now
+            prev_model = copy.deepcopy(self.model)
+            self.model = model
             evaluate_dict = ModelEvaluator.evaluate(dataloader_val, self, log_dict_prefix='val.')
             outputs_dict = ModelEvaluator.log_outputs(dataloader_val, self, log_dict_prefix='val.')
 
@@ -163,6 +166,10 @@ class ConvolutionalNetworkModel(ModelBase):
                 self.best_loss = validation_loss
                 self.best_epoch = epoch
                 self.save_model()
+            else:
+                print(" - new loss {} is worse than previous {} -> keeping the previous model..."
+                      .format(validation_loss, self.best_loss))
+                self.model = prev_model
 
             # Log the progress
             epoch_loss = epoch_loss / num_samples
