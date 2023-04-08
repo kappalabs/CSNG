@@ -9,6 +9,7 @@ import torch.utils.data
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+import kornia.augmentation as K
 
 from typing import Tuple
 from torchinfo import summary
@@ -28,6 +29,7 @@ class ConvolutionalNetworkModel(ModelBase):
         self.best_epoch = 0
         self.epoch = 0
 
+        # Prepare the criterion
         self.criterion = None
         if self.model_loss == 'L1':
             self.criterion = nn.L1Loss(reduction='none')
@@ -40,6 +42,18 @@ class ConvolutionalNetworkModel(ModelBase):
         else:
             raise Exception("Unknown loss function: " + self.model_loss)
         self.criterion.to(self.device)
+
+        # Prepare the model transformations
+        self.train_stimuli_transform = nn.Sequential()
+        self.random_erasing = config['random_erasing']
+        if self.random_erasing:
+            transform_ = K.RandomErasing(p=0.1, value=0.5)
+            self.train_stimuli_transform.add_module('RandomErasing', transform_)
+        self.random_gaussian_noise = config['random_gaussian_noise']
+        if self.random_gaussian_noise:
+            transform_ = K.RandomGaussianNoise(p=0.1, mean=0.0, std=0.1)
+            self.train_stimuli_transform.add_module('RandomGaussianNoise', transform_)
+        self.train_stimuli_transform.to(self.device)
 
         self.load_model()
 
@@ -123,6 +137,9 @@ class ConvolutionalNetworkModel(ModelBase):
             for i, data in enumerate(dataloader_trn, 0):
                 stimuli = data['stimulus'].to(self.device, dtype=torch.float)
                 responses = data['response'].to(self.device, dtype=torch.float)
+
+                # Perform the transforms
+                stimuli = self.train_stimuli_transform(stimuli)
 
                 # Prepare the network
                 optimizer.zero_grad()

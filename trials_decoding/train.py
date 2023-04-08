@@ -35,6 +35,8 @@ def get_configuration():
         "dropout": 0.5,
         "gpu": 0,
         "optimizer": "adam",
+        "random_erasing": False,
+        "random_gaussian_noise": False,
     }
 
     parser = argparse.ArgumentParser()
@@ -59,6 +61,8 @@ def get_configuration():
     parser.add_argument('--dropout', type=float, default=default_config['dropout'])
     parser.add_argument('--gpu', type=int, default=default_config['gpu'], help="GPU ID to use (default: 0)")
     parser.add_argument('--optimizer', type=str, default=default_config['optimizer'], help="adam/sgd")
+    parser.add_argument('--random_erasing', default=default_config['random_erasing'], action='store_true')
+    parser.add_argument('--random_gaussian_noise', default=default_config['random_gaussian_noise'], action='store_true')
 
     args = parser.parse_args()
     default_config.update(vars(args))
