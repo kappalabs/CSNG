@@ -101,7 +101,7 @@ class ConvolutionalNetworkModel(ModelBase):
                     saved_version, self.version))
 
         print("printing the model summary (for debugging purposes)...")
-        summary(self.model, input_size=(1, 60_000))
+        summary(self.model, input_size=(1, np.prod(self.response_shape)))
 
     def fit(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader):
         self.model.train()
