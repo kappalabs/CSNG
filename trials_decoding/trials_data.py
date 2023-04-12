@@ -86,6 +86,7 @@ class TrialsData:
         self.dataset_train = {'response': [], 'stimulus': []}
         self.dataset_val = {'response': [], 'stimulus': []}
         self.dataset_test = {'response': [], 'stimulus': []}
+        prechoised_indices = None
         for sample_info, sample_dict in self.dataset.items():
             sample_response = np.hstack([
                 sample_dict['V1_Exc_L4'],  # 24000
@@ -95,9 +96,11 @@ class TrialsData:
             ])  # 60000
             if self.limit_responses < 0 or self.limit_responses > len(sample_response):
                 self.limit_responses = len(sample_response)
-            else:
-                np.random.seed(self.seed)
-                sample_response = np.random.choice(sample_response, self.limit_responses, replace=False)
+            if self.limit_responses < len(sample_response):
+                if prechoised_indices is None:
+                    np.random.seed(self.seed)
+                    prechoised_indices = np.random.choice(len(sample_response), self.limit_responses, replace=False)
+                sample_response = sample_response[prechoised_indices]
             sample_stimulus = sample_dict['stimulus']  # 110 x 110
             # Add channels dimension
             sample_stimulus = np.expand_dims(sample_stimulus, axis=0)  # 1 x 110 x 110
