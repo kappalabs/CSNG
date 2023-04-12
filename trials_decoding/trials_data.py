@@ -12,7 +12,7 @@ from definitions import project_dir_path
 class TrialsData:
 
     def __init__(self, train_part=0.7, val_part=0.1, datanorm_stimuli=None, datanorm_response=None, num_trials=10,
-                 seed=42, limit_train=-1, limit_val=-1, limit_test=-1, debug_save_images=False):
+                 seed=42, limit_train=-1, limit_val=-1, limit_test=-1, limit_responses=-1, debug_save_images=False):
         self.train_part = train_part
         self.val_part = val_part
         self.datanorm_stimuli = datanorm_stimuli
@@ -22,6 +22,7 @@ class TrialsData:
         self.limit_train = limit_train
         self.limit_test = limit_test
         self.limit_val = limit_val
+        self.limit_responses = limit_responses
         self.debug_save_images = debug_save_images
 
         # Load the dataset from pickle file
@@ -87,11 +88,16 @@ class TrialsData:
         self.dataset_test = {'response': [], 'stimulus': []}
         for sample_info, sample_dict in self.dataset.items():
             sample_response = np.hstack([
-                sample_dict['V1_Exc_L4'],
-                sample_dict['V1_Exc_L2/3'],
-                sample_dict['V1_Inh_L4'],
-                sample_dict['V1_Inh_L2/3'],
-            ])  # 4 x 24000
+                sample_dict['V1_Exc_L4'],  # 24000
+                sample_dict['V1_Exc_L2/3'],  # 24000
+                sample_dict['V1_Inh_L4'],  # 6000
+                sample_dict['V1_Inh_L2/3'],  # 6000
+            ])  # 60000
+            if self.limit_responses < 0 or self.limit_responses > len(sample_response):
+                self.limit_responses = len(sample_response)
+            else:
+                np.random.seed(self.seed)
+                sample_response = np.random.choice(sample_response, self.limit_responses, replace=False)
             sample_stimulus = sample_dict['stimulus']  # 110 x 110
             # Add channels dimension
             sample_stimulus = np.expand_dims(sample_stimulus, axis=0)  # 1 x 110 x 110
