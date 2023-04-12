@@ -9,6 +9,8 @@ class CNNModel(CNNModelBase):
     def __init__(self, stimuli_shape, response_shape, dropout: float):
         super().__init__(stimuli_shape, response_shape, dropout)
 
+        self.number_inputs = int(np.prod(response_shape))
+
         ngf = 32
         self.max_pool_kernel_size = 1
         # num_filters = int(np.prod(response_shape))
@@ -27,11 +29,9 @@ class CNNModel(CNNModelBase):
         # )
 
         # self.compressed_side_size = 5
-        # self.compressed_channels = 2_400
         self.compressed_side_size = 2
-        self.compressed_channels = 15_000
         # self.compressed_side_size = 1
-        # self.compressed_channels = 60_000
+        self.compressed_channels = self.number_inputs // self.compressed_side_size
 
         self.decode = nn.Sequential(
             # input is Z, going into a convolution
