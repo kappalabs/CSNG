@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import kornia.augmentation as K
 
+from tqdm import tqdm
 from typing import Tuple
 from torchinfo import summary
 from collections import defaultdict
@@ -129,6 +130,7 @@ class ConvolutionalNetworkModel(ModelBase):
 
         print("Starting Training Loop...")
         # For each epoch
+        pbar_epoch = tqdm(total=self.num_epochs - self.num_epochs_curr, unit='epoch', colour="green", ascii=True)
         for epoch in range(self.num_epochs_curr + 1, self.num_epochs + 1):
             epoch_loss = torch.zeros((1,)).to(self.device, dtype=torch.float)
             dict_losses = defaultdict(float)
@@ -212,6 +214,9 @@ class ConvolutionalNetworkModel(ModelBase):
             scheduler.step()
 
             self.num_epochs_curr = epoch
+
+            pbar_epoch.update(1)
+        pbar_epoch.close()
 
     def train(self, dataloader_trn: torch.utils.data.DataLoader, dataloader_val: torch.utils.data.DataLoader,
               continue_training=False):
