@@ -45,6 +45,12 @@ class ConvolutionalNetworkModel(ModelBase):
             self.criterion_msssim = kornia.losses.MS_SSIMLoss(reduction='none').to(self.device)
             alpha = 0.84
             self.criterion = lambda x, y: alpha * self.criterion_msssim(x, y) + (1 - alpha) * self.criterion_l1(x, y)
+        elif self.model_loss == 'D1':
+            from ml_models.losses.discriminator_v1 import Discriminator
+            self.criterion = Discriminator().to(self.device)
+
+            print("printing the Discriminator model summary (for debugging purposes)...")
+            summary(self.criterion, input_size=(1, *self.stimuli_shape))
         else:
             raise Exception("Unknown loss function: " + self.model_loss)
 
@@ -132,6 +138,18 @@ class ConvolutionalNetworkModel(ModelBase):
 
         eval_criteria = ModelEvaluator.get_criteria(self.device)
 
+        criterion_bce = nn.BCELoss()
+
+        # Establish convention for real and fake labels during training
+        real_label = 1.
+        fake_label = 0.
+        if self.model_loss == 'D1':
+            optimizerD = optim.Adam(self.criterion.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+
+            # eval_criteria.append(('D1', lambda x, y: criterion_bce(self.criterion(y),
+            #                                                        torch.ones_like(self.criterion(y)))))
+            eval_criteria.append(('D1', lambda x, y: self.criterion(y)))
+
         print("Starting Training Loop...")
         # For each epoch
         pbar_epoch = tqdm(total=self.num_epochs - self.num_epochs_curr, unit='epoch', colour="green", ascii=True)
@@ -147,28 +165,84 @@ class ConvolutionalNetworkModel(ModelBase):
                 # Perform the transforms
                 stimuli = self.train_stimuli_transform(stimuli)
 
-                # Prepare the network
-                optimizer.zero_grad()
-                # Compute the predictions
-                predictions = model(responses)
-                if transform_crop is not None:
-                    stimuli = transform_crop(stimuli)
-                    predictions = transform_crop(predictions)
-                # Compute the loss
-                loss = self.criterion(stimuli, predictions)
-                if len(loss.shape) == 4:
-                    epoch_loss += loss.detach().mean(dim=1).mean(dim=1).mean(dim=1).sum()
-                if len(loss.shape) == 3:
-                    epoch_loss += loss.detach().mean(dim=1).mean(dim=1).sum()
-                loss = loss.mean()
-                # Back-propagate the loss
-                loss.backward()
-                optimizer.step()
+                if self.model_loss == 'D1':
+                    ############################
+                    # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+                    ###########################
+                    ## Train with all-real batch
+                    self.criterion.zero_grad()
+                    b_size = stimuli.size(0)
+                    label = torch.full((b_size,), real_label, dtype=torch.float, device=self.device)
+                    # Forward pass real batch through D
+                    output = self.criterion(stimuli).view(-1)
+                    # Calculate loss on all-real batch
+                    errD_real = criterion_bce(output, label)
+                    # Calculate gradients for D in backward pass
+                    errD_real.backward()
+                    D_x = output.mean().item()
+                    dict_losses['D_x'] += D_x
+
+                    ## Train with all-fake batch
+                    # # Generate fake image batch with G
+                    predictions = model(responses)
+                    label.fill_(fake_label)
+                    # Classify all fake batch with D
+                    output = self.criterion(predictions.detach()).view(-1)
+                    # Calculate D's loss on the all-fake batch
+                    errD_fake = criterion_bce(output, label)
+                    # Calculate the gradients for this batch, accumulated (summed) with previous gradients
+                    errD_fake.backward()
+                    D_G_z1 = output.mean().item()
+                    dict_losses['D_G_z1'] += D_G_z1
+                    # Compute error of D as sum over the fake and the real batches
+                    errD = errD_real + errD_fake
+                    dict_losses['errD'] += errD.item()
+                    # Update D
+                    optimizerD.step()
+
+                    ############################
+                    # (2) Update G network: maximize log(D(G(z)))
+                    ###########################
+                    model.zero_grad()
+                    label.fill_(real_label)  # fake labels are real for generator cost
+                    # Since we just updated D, perform another forward pass of all-fake batch through D
+                    output = self.criterion(predictions).view(-1)
+                    # Calculate G's loss based on this output
+                    errG = criterion_bce(output, label)
+                    # Calculate gradients for G
+                    errG.backward()
+                    D_G_z2 = output.mean().item()
+                    dict_losses['D_G_z2'] += D_G_z2
+                    # Update G
+                    optimizer.step()
+
+                    loss = errG
+                else:
+                    # Prepare the network
+                    optimizer.zero_grad()
+                    # Compute the predictions
+                    predictions = model(responses)
+
+                    if transform_crop is not None:
+                        stimuli = transform_crop(stimuli)
+                        predictions = transform_crop(predictions)
+                    # Compute the loss
+                    loss = self.criterion(stimuli, predictions)
+                    if len(loss.shape) == 4:
+                        epoch_loss += loss.detach().mean(dim=1).mean(dim=1).mean(dim=1).sum()
+                    if len(loss.shape) == 3:
+                        epoch_loss += loss.detach().mean(dim=1).mean(dim=1).sum()
+                    loss = loss.mean()
+                    # Back-propagate the loss
+                    loss.backward()
+                    optimizer.step()
 
                 # Compute all the losses
+                self.criterion.eval()
                 dict_losses_ = ModelEvaluator.compute_losses(stimuli, predictions, self.device, eval_criteria)
                 for key, value in dict_losses_.items():
                     dict_losses[key] += value
+                self.criterion.train()
 
                 # Current state info
                 if i < num_batches_in_epoch - 1:
@@ -179,8 +253,11 @@ class ConvolutionalNetworkModel(ModelBase):
             # NOTE: deepcopy is probably not necessary, but it's safer for now
             prev_model = copy.deepcopy(self.model)
             self.model = model
-            evaluate_dict = ModelEvaluator.evaluate(dataloader_val, self, log_dict_prefix='val.')
+            self.criterion.eval()
+            evaluate_dict = ModelEvaluator.evaluate(dataloader_val, self,
+                                                    criteria=eval_criteria, log_dict_prefix='val.')
             outputs_dict = ModelEvaluator.log_outputs(dataloader_val, self, log_dict_prefix='val.')
+            self.criterion.train()
 
             # Update the best loss & model
             validation_loss = evaluate_dict['val.{}'.format(self.model_loss)]

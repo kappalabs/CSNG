@@ -61,9 +61,11 @@ class ModelEvaluator:
         return loss_ssim
 
     @staticmethod
-    def evaluate(dataloader: torch.utils.data.DataLoader, model: ModelBase, log_dict_prefix: str = 'test.') -> dict:
+    def evaluate(dataloader: torch.utils.data.DataLoader, model: ModelBase,
+                 criteria: List[Tuple[str, nn.Module]] = None, log_dict_prefix: str = 'test.') -> dict:
         # Prepare criteria to measure with
-        criteria = ModelEvaluator.get_criteria(model.device)
+        if criteria is None:
+            criteria = ModelEvaluator.get_criteria(model.device)
 
         # Compute the predictions on testing dataset
         dict_losses = defaultdict(float)
