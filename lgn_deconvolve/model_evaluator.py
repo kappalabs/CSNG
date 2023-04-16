@@ -14,15 +14,6 @@ import torchvision.transforms as transforms
 
 from ml_models.model_base import ModelBase
 from lgn_deconvolve.lgn_data import LGNData
-# from ml_models.linear_network import LinearNetworkModel
-# from ml_models.linear_regression import LinearRegressionModel
-# from ml_models.convolution_network import ConvolutionalNetworkModel
-
-
-# Decide which device we want to run on
-# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
-# print('device', device)
 
 
 class ModelEvaluator:
@@ -106,16 +97,17 @@ class ModelEvaluator:
     @staticmethod
     def get_criteria(device: torch.device) -> List[Tuple[str, nn.Module]]:
         criteria = []
-        criterion_l1 = nn.L1Loss(reduction='none')
+        criterion_l1 = nn.L1Loss(reduction='none').to(device)
         criteria.append(('L1', criterion_l1))
-        criterion_mse = nn.MSELoss(reduction='none')
+        criterion_mse = nn.MSELoss(reduction='none').to(device)
         criteria.append(('MSE', criterion_mse))
-        criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none')
-        criterion_ssim.to(device)
+        criterion_ssim = kornia.losses.SSIMLoss(window_size=3, reduction='none').to(device)
         criteria.append(('SSIM', criterion_ssim))
-        criterion_ms_ssim = kornia.losses.MS_SSIMLoss(reduction='none')
-        criterion_ms_ssim.to(device)
+        criterion_ms_ssim = kornia.losses.MS_SSIMLoss(reduction='none').to(device)
         criteria.append(('MSSSIM', criterion_ms_ssim))
+        alpha = 0.84
+        criterion_mix = lambda x, y: alpha * criterion_ms_ssim(x, y) + (1 - alpha) * criterion_l1(x, y)
+        criteria.append(('MIX', criterion_mix))
 
         return criteria
 

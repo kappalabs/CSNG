@@ -33,16 +33,20 @@ class ConvolutionalNetworkModel(ModelBase):
         # Prepare the criterion
         self.criterion = None
         if self.model_loss == 'L1':
-            self.criterion = nn.L1Loss(reduction='none')
+            self.criterion = nn.L1Loss(reduction='none').to(self.device)
         elif self.model_loss == 'MSE':
-            self.criterion = nn.MSELoss(reduction='none')
+            self.criterion = nn.MSELoss(reduction='none').to(self.device)
         elif self.model_loss == 'SSIM':
-            self.criterion = kornia.losses.SSIMLoss(window_size=3, reduction='none')
+            self.criterion = kornia.losses.SSIMLoss(window_size=3, reduction='none').to(self.device)
         elif self.model_loss == 'MSSSIM':
-            self.criterion = kornia.losses.MS_SSIMLoss(reduction='none')
+            self.criterion = kornia.losses.MS_SSIMLoss(reduction='none').to(self.device)
+        elif self.model_loss == 'MIX':
+            self.criterion_l1 = nn.L1Loss(reduction='none').to(self.device)
+            self.criterion_msssim = kornia.losses.MS_SSIMLoss(reduction='none').to(self.device)
+            alpha = 0.84
+            self.criterion = lambda x, y: alpha * self.criterion_msssim(x, y) + (1 - alpha) * self.criterion_l1(x, y)
         else:
             raise Exception("Unknown loss function: " + self.model_loss)
-        self.criterion.to(self.device)
 
         # Prepare the model transformations
         self.train_stimuli_transform = nn.Sequential()
