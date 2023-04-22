@@ -222,6 +222,10 @@ class ConvolutionalNetworkModel(ModelBase):
                     optimizer.zero_grad()
                     # Compute the predictions
                     predictions = model(responses)
+                    if type(predictions) is tuple:
+                        predictions = predictions[0]
+                    else:
+                        predictions = predictions
 
                     if transform_crop is not None:
                         stimuli = transform_crop(stimuli)

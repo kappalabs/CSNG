@@ -5,6 +5,9 @@ import wandb
 import logging
 import argparse
 
+import numpy as np
+
+from PIL import Image
 from definitions import project_dir_path
 from ml_models.model_base import ModelBase
 from ml_models.linear_network import LinearNetworkModel
@@ -38,6 +41,7 @@ def get_configuration():
         "random_erasing": False,
         "random_gaussian_noise": False,
         "dataset_limit_responses": -1,
+        "output_intermediate": False,
     }
 
     parser = argparse.ArgumentParser()
@@ -65,6 +69,7 @@ def get_configuration():
     parser.add_argument('--random_erasing', default=default_config['random_erasing'], action='store_true')
     parser.add_argument('--random_gaussian_noise', default=default_config['random_gaussian_noise'], action='store_true')
     parser.add_argument('--dataset_limit_responses', type=int, default=default_config['dataset_limit_responses'])
+    parser.add_argument('--output_intermediate', default=default_config['output_intermediate'], action='store_true')
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -131,6 +136,41 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
     return model, dataloader_trn, dataloader_val, dataloader_tst, wandb_run_id
 
 
+def output_intermediate(config: dict, model: ModelBase, dataloader_tst: torch.utils.data.DataLoader):
+    sample_idx = 0
+    num_samples_to_save = 32
+    for batch_idx, batch in enumerate(dataloader_tst):
+        # Load the data
+        stimuli, response = batch['stimulus'], batch['response']
+        stimuli = stimuli.to(model.device, dtype=torch.float)
+        response = response.to(model.device, dtype=torch.float)
+
+        # Compute the predictions
+        predictions, intermediates = model.predict_batch(response)
+
+        print(intermediates.shape)
+        # save the intermediate activations
+        if config['output_intermediate']:
+            intermediate_path = os.path.join(project_dir_path, "intermediate", config['model_type'], wandb.run.name)
+            if not os.path.exists(intermediate_path):
+                os.makedirs(intermediate_path)
+            for intermediate in intermediates:
+                intermediate = intermediate.cpu().numpy()
+                # Save the numpy image
+                intermediate = np.squeeze(intermediate)
+                intermediate = intermediate - np.min(intermediate)
+                intermediate = intermediate / np.max(intermediate)
+                intermediate = np.uint8(intermediate * 255)
+                intermediate = Image.fromarray(intermediate)
+                intermediate.save(os.path.join(intermediate_path, "intermediate_{}.png".format(sample_idx)))
+                sample_idx += 1
+
+                if sample_idx >= num_samples_to_save:
+                    break
+        if sample_idx >= num_samples_to_save:
+            break
+
+
 def train(config: dict, device: torch.device):
     checkpoint_filepath = os.path.join(project_dir_path, "checkpoints", config['model_type'], config['model_name'])
     model, dataloader_trn, dataloader_val, dataloader_tst, wandb_run_id = \
@@ -145,6 +185,9 @@ def train(config: dict, device: torch.device):
     if not config['evaluate']:
         # Train the model
         model.train(dataloader_trn, dataloader_val)
+
+    if config['output_intermediate']:
+        output_intermediate(config, model, dataloader_tst)
 
     # Evaluate the model
     print("Evaluating LR (#train {}) model {}".format(config['dataset_limit_train'], config['model_type']))
