@@ -29,8 +29,8 @@ class CNNModel(CNNModelBase):
         # )
 
         # self.compressed_side_size = 5
-        self.compressed_side_size = 2
-        # self.compressed_side_size = 1
+        # self.compressed_side_size = 2
+        self.compressed_side_size = 1
         self.compressed_channels = self.number_inputs // self.compressed_side_size
 
         self.decode = nn.Sequential(
