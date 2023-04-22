@@ -32,6 +32,7 @@ class ConvolutionalNetworkModel(ModelBase):
 
         # Prepare the criterion
         self.criterion = None
+        self.criterion_msssim = kornia.losses.MS_SSIMLoss(reduction='none').to(self.device)
         if self.model_loss == 'L1':
             self.criterion = nn.L1Loss(reduction='none').to(self.device)
         elif self.model_loss == 'MSE':
@@ -208,7 +209,9 @@ class ConvolutionalNetworkModel(ModelBase):
                     # Since we just updated D, perform another forward pass of all-fake batch through D
                     output = self.criterion(predictions).view(-1)
                     # Calculate G's loss based on this output
-                    errG = criterion_bce(output, label)
+                    alpha = 0.8
+                    errG = alpha * criterion_bce(output, label) + \
+                           (1-alpha) * self.criterion_msssim(stimuli, predictions).mean(dim=1).mean(dim=1).sum()
                     # Calculate gradients for G
                     errG.backward()
                     D_G_z2 = output.mean().item()
