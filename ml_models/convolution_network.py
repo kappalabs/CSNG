@@ -225,6 +225,10 @@ class ConvolutionalNetworkModel(ModelBase):
                     optimizer.zero_grad()
                     # Compute the predictions
                     predictions = model(responses)
+                    if type(predictions) is tuple:
+                        predictions = predictions[0]
+                    else:
+                        predictions = predictions
 
                     if transform_crop is not None:
                         stimuli = transform_crop(stimuli)
@@ -317,7 +321,16 @@ class ConvolutionalNetworkModel(ModelBase):
 
         data_response = batch.to(self.device, dtype=torch.float)
 
-        prediction = self.model(data_response).detach()
+        prediction = self.model(data_response)
+        if type(prediction) is tuple:
+            prediction = prediction[0].detach()
+            intermediate = prediction[1].detach()
+        else:
+            prediction = prediction.detach()
+            intermediate = None
+
+        if self.config['output_intermediate']:
+            return prediction, intermediate
 
         return prediction
 

@@ -87,11 +87,11 @@ class CNNModel(CNNModelBase):
 
     def forward(self, x):
         x = self.intermediate(x)
-        x = x.view(-1, self.output_fc_channels, self.output_fc_side_size, self.output_fc_side_size)
+        intermediate = x.view(-1, self.output_fc_channels, self.output_fc_side_size, self.output_fc_side_size)
 
-        x = self.encode(x)
+        x = self.encode(intermediate)
         x = self.decode(x)
 
         x = nn.functional.interpolate(x, size=self.stimuli_shape[-2:], mode='bilinear', align_corners=False)
 
-        return x
+        return x, intermediate
