@@ -138,7 +138,7 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
 
 def output_intermediate(config: dict, model: ModelBase, dataloader_tst: torch.utils.data.DataLoader):
     sample_idx = 0
-    num_samples_to_save = 32
+    num_samples_to_save = 64
     for batch_idx, batch in enumerate(dataloader_tst):
         # Load the data
         stimuli, response = batch['stimulus'], batch['response']
@@ -146,16 +146,15 @@ def output_intermediate(config: dict, model: ModelBase, dataloader_tst: torch.ut
         response = response.to(model.device, dtype=torch.float)
 
         # Compute the predictions
-        predictions, intermediates = model.predict_batch(response)
+        predictions, intermediates = model.predict_batch_with_intermediate(response)
 
-        print(intermediates.shape)
         # save the intermediate activations
         if config['output_intermediate']:
             intermediate_path = os.path.join(project_dir_path, "intermediate", config['model_type'], wandb.run.name)
             if not os.path.exists(intermediate_path):
                 os.makedirs(intermediate_path)
-            for intermediate in intermediates:
-                intermediate = intermediate.cpu().numpy()
+            for sample_in_batch_idx in range(stimuli.shape[0]):
+                intermediate = intermediates[sample_in_batch_idx].cpu().numpy()
                 # Save the numpy image
                 intermediate = np.squeeze(intermediate)
                 intermediate = intermediate - np.min(intermediate)
@@ -163,6 +162,20 @@ def output_intermediate(config: dict, model: ModelBase, dataloader_tst: torch.ut
                 intermediate = np.uint8(intermediate * 255)
                 intermediate = Image.fromarray(intermediate)
                 intermediate.save(os.path.join(intermediate_path, "intermediate_{}.png".format(sample_idx)))
+                stimulus = stimuli[sample_in_batch_idx].cpu().numpy()
+                stimulus = np.squeeze(stimulus)
+                stimulus = stimulus - np.min(stimulus)
+                stimulus = stimulus / np.max(stimulus)
+                stimulus = np.uint8(stimulus * 255)
+                stimulus = Image.fromarray(stimulus)
+                stimulus.save(os.path.join(intermediate_path, "stimulus_{}.png".format(sample_idx)))
+                prediction = predictions[sample_in_batch_idx].cpu().numpy()
+                prediction = np.squeeze(prediction)
+                prediction = prediction - np.min(prediction)
+                prediction = prediction / np.max(prediction)
+                prediction = np.uint8(prediction * 255)
+                prediction = Image.fromarray(prediction)
+                prediction.save(os.path.join(intermediate_path, "prediction_{}.png".format(sample_idx)))
                 sample_idx += 1
 
                 if sample_idx >= num_samples_to_save:

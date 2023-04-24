@@ -224,11 +224,11 @@ class ConvolutionalNetworkModel(ModelBase):
                     # Prepare the network
                     optimizer.zero_grad()
                     # Compute the predictions
-                    predictions = model(responses)
-                    if type(predictions) is tuple:
-                        predictions = predictions[0]
+                    output = model(responses)
+                    if type(output) is tuple:
+                        predictions = output[0]
                     else:
-                        predictions = predictions
+                        predictions = output
 
                     if transform_crop is not None:
                         stimuli = transform_crop(stimuli)
@@ -321,18 +321,30 @@ class ConvolutionalNetworkModel(ModelBase):
 
         data_response = batch.to(self.device, dtype=torch.float)
 
-        prediction = self.model(data_response)
-        if type(prediction) is tuple:
-            prediction = prediction[0].detach()
-            intermediate = prediction[1].detach()
+        output = self.model(data_response)
+        if type(output) is tuple:
+            prediction = output[0].detach()
         else:
-            prediction = prediction.detach()
-            intermediate = None
-
-        if self.config['output_intermediate']:
-            return prediction, intermediate
+            prediction = output.detach()
 
         return prediction
+
+    def predict_batch_with_intermediate(self, batch: torch.FloatTensor) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+        super().predict_batch_with_intermediate(batch)
+
+        self.model.eval()
+
+        data_response = batch.to(self.device, dtype=torch.float)
+
+        output = self.model(data_response)
+        if type(output) is tuple:
+            prediction = output[0].detach()
+            intermediate = output[1].detach()
+        else:
+            prediction = output.detach()
+            intermediate = None
+
+        return prediction, intermediate
 
     def predict(self, dataloader: torch.utils.data.DataLoader) -> torch.FloatTensor:
         super().predict(dataloader)

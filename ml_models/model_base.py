@@ -4,6 +4,8 @@ import wandb
 import torch
 import pickle
 
+from typing import Tuple
+
 
 class ModelBase(abc.ABC):
 
@@ -57,6 +59,12 @@ class ModelBase(abc.ABC):
 
     @abc.abstractmethod
     def predict_batch(self, batch: torch.FloatTensor) -> torch.FloatTensor:
+        if self.model is None:
+            raise Exception("Model not trained")
+        pass
+
+    @abc.abstractmethod
+    def predict_batch_with_intermediate(self, batch: torch.FloatTensor) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         if self.model is None:
             raise Exception("Model not trained")
         pass
