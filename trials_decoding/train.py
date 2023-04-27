@@ -42,6 +42,10 @@ def get_configuration():
         "random_gaussian_noise": False,
         "dataset_limit_responses": -1,
         "output_intermediate": False,
+        "dataset_dont_use_l4": False,
+        "dataset_dont_use_l23": False,
+        "dataset_dont_use_inhibitory": False,
+        "dataset_dont_use_excitatory": False,
     }
 
     parser = argparse.ArgumentParser()
@@ -70,6 +74,12 @@ def get_configuration():
     parser.add_argument('--random_gaussian_noise', default=default_config['random_gaussian_noise'], action='store_true')
     parser.add_argument('--dataset_limit_responses', type=int, default=default_config['dataset_limit_responses'])
     parser.add_argument('--output_intermediate', default=default_config['output_intermediate'], action='store_true')
+    parser.add_argument('--dataset_dont_use_l4', default=default_config['dataset_dont_use_l4'], action='store_true')
+    parser.add_argument('--dataset_dont_use_l23', default=default_config['dataset_dont_use_l23'], action='store_true')
+    parser.add_argument('--dataset_dont_use_inhibitory', default=default_config['dataset_dont_use_inhibitory'],
+                        action='store_true')
+    parser.add_argument('--dataset_dont_use_excitatory', default=default_config['dataset_dont_use_excitatory'],
+                        action='store_true')
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -87,6 +97,10 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
         limit_test=config['dataset_limit_test'],
         num_trials=config['dataset_num_trials'],
         limit_responses=config['dataset_limit_responses'],
+        dont_use_l4=config['dataset_dont_use_l4'],
+        dont_use_l23=config['dataset_dont_use_l23'],
+        dont_use_inhibitory=config['dataset_dont_use_inhibitory'],
+        dont_use_excitatory=config['dataset_dont_use_excitatory'],
     )
     dataset_trn = TrialsDataset(data, data_type='train')
     dataset_val = TrialsDataset(data, data_type='validation')

@@ -12,7 +12,9 @@ from definitions import project_dir_path
 class TrialsData:
 
     def __init__(self, train_part=0.7, val_part=0.1, datanorm_stimuli=None, datanorm_response=None, num_trials=10,
-                 seed=42, limit_train=-1, limit_val=-1, limit_test=-1, limit_responses=-1, debug_save_images=False):
+                 seed=42, limit_train=-1, limit_val=-1, limit_test=-1, limit_responses=-1,
+                 dont_use_l4=False, dont_use_l23=False, dont_use_inhibitory=False, dont_use_excitatory=False,
+                 debug_save_images=False):
         self.train_part = train_part
         self.val_part = val_part
         self.datanorm_stimuli = datanorm_stimuli
@@ -23,6 +25,10 @@ class TrialsData:
         self.limit_test = limit_test
         self.limit_val = limit_val
         self.limit_responses = limit_responses
+        self.dont_use_l4 = dont_use_l4
+        self.dont_use_l23 = dont_use_l23
+        self.dont_use_inhibitory = dont_use_inhibitory
+        self.dont_use_excitatory = dont_use_excitatory
         self.debug_save_images = debug_save_images
 
         # Load the dataset from pickle file
@@ -88,12 +94,32 @@ class TrialsData:
         self.dataset_test = {'response': [], 'stimulus': []}
         prechoised_indices = None
         for sample_info, sample_dict in self.dataset.items():
-            sample_response = np.hstack([
-                sample_dict['V1_Exc_L4'],  # 24000
-                sample_dict['V1_Exc_L2/3'],  # 24000
-                sample_dict['V1_Inh_L4'],  # 6000
-                sample_dict['V1_Inh_L2/3'],  # 6000
-            ])  # 60000
+            sample_response = None
+            if not self.dont_use_excitatory:
+                if not self.dont_use_l4:
+                    sample_response = sample_dict['V1_Exc_L4']
+                if not self.dont_use_l23:
+                    if sample_response is None:
+                        sample_response = sample_dict['V1_Exc_L2/3']
+                    else:
+                        sample_response = np.hstack([sample_response, sample_dict['V1_Exc_L2/3']])
+            if not self.dont_use_inhibitory:
+                if not self.dont_use_l4:
+                    if sample_response is None:
+                        sample_response = sample_dict['V1_Inh_L4']
+                    else:
+                        sample_response = np.hstack([sample_response, sample_dict['V1_Inh_L4']])
+                if not self.dont_use_l23:
+                    if sample_response is None:
+                        sample_response = sample_dict['V1_Inh_L2/3']
+                    else:
+                        sample_response = np.hstack([sample_response, sample_dict['V1_Inh_L2/3']])
+            # sample_response = np.hstack([
+            #     sample_dict['V1_Exc_L4'],  # 24000
+            #     sample_dict['V1_Exc_L2/3'],  # 24000
+            #     sample_dict['V1_Inh_L4'],  # 6000
+            #     sample_dict['V1_Inh_L2/3'],  # 6000
+            # ])  # 60000
             if self.limit_responses < 0 or self.limit_responses > len(sample_response):
                 self.limit_responses = len(sample_response)
             if self.limit_responses < len(sample_response):
@@ -233,15 +259,18 @@ class TrialsDataset(torch.utils.data.Dataset):
         self._inspect_data()
 
     def _inspect_data(self):
+        print("Inspecting {} data:".format(self.data_type))
         mi, ma, mean, std = \
             self.responses.min(), self.responses.max(), \
             self.responses.mean(), self.responses.std()
-        print(" - responses description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
+        print(" - responses description: shape {}, min {}, max {}, mean {}, std {}"
+              .format(self.responses.shape, mi, ma, mean, std))
 
         mi, ma, mean, std = \
             self.stimuli.min(), self.stimuli.max(), \
             self.stimuli.mean(), self.stimuli.std()
-        print(" - stimuli description: min {}, max {}, mean {}, std {}".format(mi, ma, mean, std))
+        print(" - stimuli description: shape {}, min {}, max {}, mean {}, std {}"
+              .format(self.responses.shape, mi, ma, mean, std))
 
     def __len__(self):
         return self.num_samples
