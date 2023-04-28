@@ -1,15 +1,14 @@
 import os
 import sys
 import torch
-import wandb
 import logging
 import argparse
 import kornia.augmentation
 
 import numpy as np
 
-from PIL import Image
 from definitions import project_dir_path
+from PIL import Image, ImageDraw, ImageFont
 from lgn_deconvolve.model_evaluator import ModelEvaluator
 from trials_decoding.trials_data import TrialsData, TrialsDataset
 
@@ -17,8 +16,6 @@ from trials_decoding.trials_data import TrialsData, TrialsDataset
 def get_configuration():
     default_config = {
         "project_name": "trials_decoding",
-        # "learning_rate": 2e-4,
-        # "num_epochs": 20,
         "batch_size": 8,
         "num_workers": 4,
         "dataset_num_trials": 10,
@@ -26,25 +23,12 @@ def get_configuration():
         "dataset_limit_test": -1,
         "dataset_normalization_stimuli": "zeroone",
         "dataset_normalization_response": "mean0_std1",
-        # "model_type": "convolution_network",
-        # "model_version": 4,
-        # "model_loss": "MSSSIM",
-        # "model_name": 'dummy.pth',
-        # "clear_progress": True,
-        # "evaluate": False,
-        # "dropout": 0.5,
         "gpu": 0,
-        # "optimizer": "adam",
-        # "random_erasing": False,
-        # "random_gaussian_noise": False,
         "dataset_limit_responses": -1,
-        # "output_intermediate": False,
     }
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--project_name', type=str, default=default_config['project_name'])
-    # parser.add_argument('--learning_rate', type=float, default=default_config['learning_rate'])
-    # parser.add_argument('--num_epochs', type=int, default=default_config['num_epochs'])
     parser.add_argument('--batch_size', type=int, default=default_config['batch_size'])
     parser.add_argument('--num_workers', type=int, default=default_config['num_workers'])
     parser.add_argument('--dataset_num_trials', type=int, default=default_config['dataset_num_trials'])
@@ -54,19 +38,8 @@ def get_configuration():
                         default=default_config['dataset_normalization_stimuli'])
     parser.add_argument('--dataset_normalization_response', type=str,
                         default=default_config['dataset_normalization_response'])
-    # parser.add_argument('--model_type', type=str, default=default_config['model_type'])
-    # parser.add_argument('--model_version', type=int, default=default_config['model_version'])
-    # parser.add_argument('--model_loss', type=str, default=default_config['model_loss'], help="L1/MSE/SSIM/MSSSIM/PSNR")
-    # parser.add_argument('--model_name', type=str, default=default_config['model_name'])
-    # parser.add_argument('--clear_progress', default=default_config['clear_progress'], action='store_true')
-    # parser.add_argument('--evaluate', default=default_config['evaluate'], action='store_true')
-    # parser.add_argument('--dropout', type=float, default=default_config['dropout'])
     parser.add_argument('--gpu', type=int, default=default_config['gpu'], help="GPU ID to use (default: 0)")
-    # parser.add_argument('--optimizer', type=str, default=default_config['optimizer'], help="adam/sgd")
-    # parser.add_argument('--random_erasing', default=default_config['random_erasing'], action='store_true')
-    # parser.add_argument('--random_gaussian_noise', default=default_config['random_gaussian_noise'], action='store_true')
     parser.add_argument('--dataset_limit_responses', type=int, default=default_config['dataset_limit_responses'])
-    # parser.add_argument('--output_intermediate', default=default_config['output_intermediate'], action='store_true')
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -74,7 +47,7 @@ def get_configuration():
     return default_config
 
 
-def load_checkpoint(config: dict) -> (torch.utils.data, torch.utils.data, torch.utils.data):
+def prepare_dataloader(config: dict) -> torch.utils.data:
     # Prepare the data
     data = TrialsData(
         datanorm_stimuli=config['dataset_normalization_stimuli'],
@@ -84,25 +57,8 @@ def load_checkpoint(config: dict) -> (torch.utils.data, torch.utils.data, torch.
         num_trials=config['dataset_num_trials'],
         limit_responses=config['dataset_limit_responses'],
     )
-    dataset_trn = TrialsDataset(data, data_type='train')
-    dataset_val = TrialsDataset(data, data_type='validation')
     dataset_tst = TrialsDataset(data, data_type='test')
 
-    # Prepare dataloader
-    dataloader_trn = torch.utils.data.DataLoader(
-        dataset=dataset_trn,
-        batch_size=config['batch_size'],
-        shuffle=True,
-        num_workers=config['num_workers'],
-    )
-    print("Prepared TRN dataloader with", len(dataloader_trn.dataset), "samples")
-    dataloader_val = torch.utils.data.DataLoader(
-        dataset=dataset_val,
-        batch_size=config['batch_size'],
-        shuffle=False,
-        num_workers=config['num_workers'],
-    )
-    print("Prepared VAL dataloader with", len(dataloader_val.dataset), "samples")
     dataloader_tst = torch.utils.data.DataLoader(
         dataset=dataset_tst,
         batch_size=config['batch_size'],
@@ -111,64 +67,99 @@ def load_checkpoint(config: dict) -> (torch.utils.data, torch.utils.data, torch.
     )
     print("Prepared TST dataloader with", len(dataloader_tst.dataset), "samples")
 
+    return dataloader_tst
 
-def output_evaluation(config: dict, device: torch.device, dataloader_tst: torch.utils.data.DataLoader):
+
+def get_augmented_stimulus_loss(stimulus_torch: torch.FloatTensor, stimulus_augmented: torch.FloatTensor, criterion,
+                                metrics_evaluation_path: str, sample_idx: int, criterion_name: str,
+                                augmentation_name: str):
+    # make a blurred version of the stimulus, compute loss and save
+    loss_blurred = torch.mean(criterion(stimulus_torch, stimulus_augmented))
+    stimulus_augmented = stimulus_augmented.cpu().numpy()
+    stimulus_augmented = np.squeeze(stimulus_augmented)
+    stimulus_augmented = np.uint8(stimulus_augmented * 255)
+    # Add black space above the image to fit the text
+    stimulus_augmented = np.concatenate((np.zeros((20, stimulus_augmented.shape[1]), dtype=stimulus_augmented.dtype),
+                                         stimulus_augmented), axis=0)
+    stimulus_augmented = Image.fromarray(stimulus_augmented)
+    # Draw the loss above the image
+    draw = ImageDraw.Draw(stimulus_augmented)
+    loss_value = round(loss_blurred.item(), 2)
+    # use bigger font size
+    font = ImageFont.truetype('ORIOND.TTF', 20)
+    draw.text((0, 0), str(loss_value), 255, font=font)
+    stimulus_augmented.save(
+        os.path.join(metrics_evaluation_path,
+                     "stimulus_{}_{}_{}.png".format(sample_idx, augmentation_name, criterion_name)))
+
+
+def output_evaluation(device: torch.device, dataloader_tst: torch.utils.data.DataLoader):
     criteria = ModelEvaluator.get_criteria(device)
 
-    blur = kornia.augmentation.RandomGaussianBlur()
-    gauss = kornia.augmentation.RandomGaussianNoise()
+    torch.manual_seed(42)
+
+    transform_crop = ModelEvaluator.get_central_crop_transform()
+
+    augmentations = []
+    augmentations.append((lambda x: x, "original"))
+
+    # augmentations.append((kornia.augmentation.RandomGaussianBlur(kernel_size=65, sigma=(1, 1), p=1.0), "blur_65_1"))
+    # augmentations.append((kornia.augmentation.RandomGaussianBlur(kernel_size=65, sigma=(5, 5), p=1.0), "blur_65_5"))
+    augmentations.append((kornia.augmentation.RandomGaussianBlur(kernel_size=65, sigma=(10, 10), p=1.0), "blur_65_10"))
+
+    # augmentations.append((kornia.augmentation.RandomGaussianNoise(std=0.01, p=1.0), "noise_0.01"))
+    # augmentations.append((kornia.augmentation.RandomGaussianNoise(std=0.05, p=1.0), "noise_0.05"))
+    augmentations.append((kornia.augmentation.RandomGaussianNoise(std=0.1, p=1.0), "noise_0.1"))
+
+    # add value noise
+    # create a torch tensor of size same as x, with values -1 or 1
+    augmentations.append((lambda x: x + 0.07 * (torch.randint(0, 2, x.shape) * 2 - 1), "value_noise_0.07"))
+    # augmentations.append((lambda x: x + 0.1 * (torch.randint(0, 2, x.shape) * 2 - 1), "value_noise_0.1"))
+    # augmentations.append((lambda x: x + 0.5 * (torch.randint(0, 2, x.shape) * 2 - 1), "value_noise_0.5"))
+
+    # add values shift
+    augmentations.append((lambda x: x + 0.07, "value_shift_0.07"))
+    # augmentations.append((lambda x: x + 0.1, "value_shift_0.1"))
+    # augmentations.append((lambda x: x + 0.5, "value_shift_0.5"))
+
+    # add image shift in x axis
+    # augmentations.append((lambda x: torch.roll(x, 1, 2), "image_shift_x_1"))
+    # augmentations.append((lambda x: torch.roll(x, 5, 2), "image_shift_x_5"))
+    augmentations.append((lambda x: torch.roll(x, 9, 2), "image_shift_x_9"))
 
     sample_idx = 0
-    num_samples_to_save = 64
+    num_samples_to_save = 4
     for batch_idx, batch in enumerate(dataloader_tst):
         # Load the data
         stimuli, response = batch['stimulus'], batch['response']
-        stimuli = stimuli.to(model.device, dtype=torch.float)
-        response = response.to(model.device, dtype=torch.float)
 
-        # Compute the predictions
-        predictions, intermediates = model.predict_batch_with_intermediate(response)
+        # Create the metrics evaluation directory
+        metrics_evaluation_path = os.path.join(project_dir_path, "metrics_evaluation")
+        if not os.path.exists(metrics_evaluation_path):
+            os.makedirs(metrics_evaluation_path)
 
-        # save the intermediate activations
-        if config['output_intermediate']:
-            intermediate_path = os.path.join(project_dir_path, "intermediate", config['model_type'], wandb.run.name)
-            if not os.path.exists(intermediate_path):
-                os.makedirs(intermediate_path)
-            for sample_in_batch_idx in range(stimuli.shape[0]):
-                intermediate = intermediates[sample_in_batch_idx].cpu().numpy()
-                # Save the numpy image
-                intermediate = np.squeeze(intermediate)
-                intermediate = intermediate - np.min(intermediate)
-                intermediate = intermediate / np.max(intermediate)
-                intermediate = np.uint8(intermediate * 255)
-                intermediate = Image.fromarray(intermediate)
-                intermediate.save(os.path.join(intermediate_path, "intermediate_{}.png".format(sample_idx)))
-                stimulus = stimuli[sample_in_batch_idx].cpu().numpy()
-                stimulus = np.squeeze(stimulus)
-                stimulus = stimulus - np.min(stimulus)
-                stimulus = stimulus / np.max(stimulus)
-                stimulus = np.uint8(stimulus * 255)
-                stimulus = Image.fromarray(stimulus)
-                stimulus.save(os.path.join(intermediate_path, "stimulus_{}.png".format(sample_idx)))
-                prediction = predictions[sample_in_batch_idx].cpu().numpy()
-                prediction = np.squeeze(prediction)
-                prediction = prediction - np.min(prediction)
-                prediction = prediction / np.max(prediction)
-                prediction = np.uint8(prediction * 255)
-                prediction = Image.fromarray(prediction)
-                prediction.save(os.path.join(intermediate_path, "prediction_{}.png".format(sample_idx)))
-                sample_idx += 1
+        # Make the transformations and save
+        for sample_in_batch_idx in range(stimuli.shape[0]):
+            stimulus_torch = stimuli[sample_in_batch_idx]
+            stimulus_torch = stimulus_torch.unsqueeze(0).detach()
+            stimulus_torch = transform_crop(stimulus_torch)
 
-                if sample_idx >= num_samples_to_save:
-                    break
+            for augmentation, augmentation_name in augmentations:
+                stimulus_augmented = augmentation(stimulus_torch)
+                # clip to [0, 1]
+                stimulus_augmented = torch.clamp(stimulus_augmented, 0, 1)
+
+                for criterion_name, criterion in criteria:
+                    # Make a blurred version of the stimulus, compute loss and save
+                    get_augmented_stimulus_loss(stimulus_torch, stimulus_augmented, criterion,
+                                                metrics_evaluation_path, sample_idx, criterion_name, augmentation_name)
+
+            sample_idx += 1
+
+            if sample_idx >= num_samples_to_save:
+                break
         if sample_idx >= num_samples_to_save:
             break
-
-
-def train(config: dict, device: torch.device):
-    dataloader_trn, dataloader_val, dataloader_tst = load_checkpoint(config)
-
-    output_evaluation(config, device, dataloader_tst)
 
 
 def main():
@@ -188,8 +179,9 @@ def main():
     print("device:", device)
     logger.info('Device is {}'.format(device))
 
-    # Train the model
-    train(config, device)
+    # Evaluate the metrics
+    dataloader_tst = prepare_dataloader(config)
+    output_evaluation(device, dataloader_tst)
 
 
 if __name__ == "__main__":
