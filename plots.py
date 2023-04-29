@@ -20,18 +20,18 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_l1):
-    plt.text(i - 0.05, v + 0.001, str(v), color='blue', fontweight='bold')
+    plt.text(i - 0.05, v + 0.001, str(v), color='black', fontweight='bold')
 for i, v in enumerate(values_mse):
-    plt.text(i + 0.2, v + 0.001, str(v), color='green', fontweight='bold')
+    plt.text(i + 0.2, v + 0.001, str(v), color='black', fontweight='bold')
 for i, v in enumerate(values_ssim):
-    plt.text(i + 0.45, v + 0.001, str(v), color='red', fontweight='bold')
+    plt.text(i + 0.45, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -53,14 +53,14 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_l1):
-    plt.text(i, v + 0.001, str(v), color='blue', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -82,14 +82,14 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['MSE', 'SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_mse):
-    plt.text(i, v + 0.0002, str(v), color='green', fontweight='bold')
+    plt.text(i, v + 0.0002, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -111,14 +111,14 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_ssim):
-    plt.text(i, v + 0.001, str(v), color='red', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -140,10 +140,10 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_msssim):
@@ -205,18 +205,18 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_l1):
-    plt.text(i - 0.05, v + 0.001, str(v), color='blue', fontweight='bold')
+    plt.text(i - 0.05, v + 0.001, str(v), color='black', fontweight='bold')
 for i, v in enumerate(values_mse):
-    plt.text(i + 0.2, v + 0.001, str(v), color='green', fontweight='bold')
+    plt.text(i + 0.2, v + 0.001, str(v), color='black', fontweight='bold')
 for i, v in enumerate(values_ssim):
-    plt.text(i + 0.45, v + 0.001, str(v), color='red', fontweight='bold')
+    plt.text(i + 0.45, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -238,14 +238,14 @@ plt.ylabel('Loss value')
 plt.xlabel('Model')
 plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_l1):
-    plt.text(i, v + 0.001, str(v), color='blue', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -269,14 +269,14 @@ plt.xlabel('Model')
 # plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 plt.legend(['MSE', 'SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_mse):
-    plt.text(i, v + 0.0002, str(v), color='green', fontweight='bold')
+    plt.text(i, v + 0.0002, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -299,14 +299,14 @@ plt.xlabel('Model')
 # plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 plt.legend(['SSIM', 'MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_ssim):
-    plt.text(i, v + 0.001, str(v), color='red', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -329,10 +329,10 @@ plt.xlabel('Model')
 # plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 plt.legend(['MSSSIM'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_msssim):
@@ -360,14 +360,14 @@ plt.xlabel('Training loss')
 # plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 plt.legend(['L1'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_l1):
-    plt.text(i, v + 0.001, str(v), color='blue', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -391,14 +391,14 @@ plt.xlabel('Training loss')
 # plt.legend(['L1', 'MSE', 'SSIM', 'MSSSIM'])
 plt.legend(['L1'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_l1):
-    plt.text(i, v + 0.001, str(v), color='blue', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -421,14 +421,14 @@ plt.ylabel('Loss value')
 plt.xlabel('Training loss')
 plt.legend(['MSE'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_mse):
-    plt.text(i, v + 0.0002, str(v), color='green', fontweight='bold')
+    plt.text(i, v + 0.0002, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -451,14 +451,14 @@ plt.ylabel('Loss value')
 plt.xlabel('Training loss')
 plt.legend(['MSE'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_ssim):
-    plt.text(i, v + 0.001, str(v), color='red', fontweight='bold')
+    plt.text(i, v + 0.001, str(v), color='black', fontweight='bold')
 
 # plt.show()
 # Save the figure
@@ -481,10 +481,10 @@ plt.ylabel('Loss value')
 plt.xlabel('Training loss')
 plt.legend(['MSE'])
 # show y axis grid
-plt.grid(axis='y')
+# plt.grid(axis='y')
 # show smaller grid lines
-plt.minorticks_on()
-plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+# plt.minorticks_on()
+# plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
 
 # show the values on top of the bars
 for i, v in enumerate(values_msssim):
@@ -558,3 +558,45 @@ plt.ylabel('L1 Loss')
 # Display the plot
 plt.savefig('dataset_size_one_trial.png', dpi=500, bbox_inches='tight')
 plt.close()
+
+# %%
+import json
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load the JSON file
+with open('results/loss_avg_for_each_augmentation_and_criterion.json', 'r') as f:
+    data = json.load(f)
+
+# Define colors for each metric
+colors = {
+    'L1': 'b',
+    'MSE': 'r',
+    'SSIM': 'g',
+    'MSSSIM': 'y',
+    'MIX': 'purple'
+}
+
+augmentations = {
+    'blur_65_10': 'Gauss blur',
+    'noise_0.1': 'Gauss noise',
+    'value_noise_0.07': 'Value noise',
+    'value_shift_0.07': 'Intensity',
+    'image_shift_x_9': 'Translation',
+}
+
+# Plot bars for each metric
+for metric in data:
+    fig, ax = plt.subplots()
+    names = list(data[metric].keys())[1:]
+    names = [augmentations[name] for name in names]
+    values = list(data[metric].values())[1:]
+    ax.bar(names, values, color=colors[metric])
+    ax.set_xlabel('Noise Type')
+    ax.set_ylabel('Metric Value')
+    ax.set_title(metric)
+    for i, v in enumerate(values):
+        ax.text(i, v, str(round(v, 4)), ha='center', va='bottom', color='black')
+    # save the figure
+    plt.savefig(f'augmentation_{metric}.png', dpi=500, bbox_inches='tight')
+    plt.close()
