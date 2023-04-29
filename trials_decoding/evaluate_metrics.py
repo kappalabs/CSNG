@@ -1,5 +1,8 @@
+import json
 import os
 import sys
+from collections import defaultdict
+
 import torch
 import logging
 import argparse
@@ -57,7 +60,16 @@ def prepare_dataloader(config: dict) -> torch.utils.data:
         num_trials=config['dataset_num_trials'],
         limit_responses=config['dataset_limit_responses'],
     )
+    dataset_trn = TrialsDataset(data, data_type='train')
     dataset_tst = TrialsDataset(data, data_type='test')
+
+    dataloader_trn = torch.utils.data.DataLoader(
+        dataset=dataset_trn,
+        batch_size=config['batch_size'],
+        shuffle=False,
+        num_workers=config['num_workers'],
+    )
+    print("Prepared TRN dataloader with", len(dataloader_trn.dataset), "samples")
 
     dataloader_tst = torch.utils.data.DataLoader(
         dataset=dataset_tst,
@@ -67,14 +79,12 @@ def prepare_dataloader(config: dict) -> torch.utils.data:
     )
     print("Prepared TST dataloader with", len(dataloader_tst.dataset), "samples")
 
-    return dataloader_tst
+    return dataloader_trn, dataloader_tst
 
 
-def get_augmented_stimulus_loss(stimulus_torch: torch.FloatTensor, stimulus_augmented: torch.FloatTensor, criterion,
-                                metrics_evaluation_path: str, sample_idx: int, criterion_name: str,
-                                augmentation_name: str):
-    # make a blurred version of the stimulus, compute loss and save
-    loss_blurred = torch.mean(criterion(stimulus_torch, stimulus_augmented))
+def save_augmented_stimulus_loss(stimulus_augmented: torch.Tensor, loss_value: float,
+                                 metrics_evaluation_path: str, sample_idx: int, criterion_name: str,
+                                 augmentation_name: str):
     stimulus_augmented = stimulus_augmented.cpu().numpy()
     stimulus_augmented = np.squeeze(stimulus_augmented)
     stimulus_augmented = np.uint8(stimulus_augmented * 255)
@@ -84,7 +94,7 @@ def get_augmented_stimulus_loss(stimulus_torch: torch.FloatTensor, stimulus_augm
     stimulus_augmented = Image.fromarray(stimulus_augmented)
     # Draw the loss above the image
     draw = ImageDraw.Draw(stimulus_augmented)
-    loss_value = round(loss_blurred.item(), 2)
+    loss_value = round(loss_value, 2)
     # use bigger font size
     font = ImageFont.truetype('ORIOND.TTF', 20)
     draw.text((0, 0), str(loss_value), 255, font=font)
@@ -92,8 +102,10 @@ def get_augmented_stimulus_loss(stimulus_torch: torch.FloatTensor, stimulus_augm
         os.path.join(metrics_evaluation_path,
                      "stimulus_{}_{}_{}.png".format(sample_idx, augmentation_name, criterion_name)))
 
+    return loss_value
 
-def output_evaluation(device: torch.device, dataloader_tst: torch.utils.data.DataLoader):
+
+def output_evaluation(device: torch.device, dataloader_tst: torch.utils.data.DataLoader, save_images: bool = False):
     criteria = ModelEvaluator.get_criteria(device)
 
     torch.manual_seed(42)
@@ -127,11 +139,15 @@ def output_evaluation(device: torch.device, dataloader_tst: torch.utils.data.Dat
     # augmentations.append((lambda x: torch.roll(x, 5, 2), "image_shift_x_5"))
     augmentations.append((lambda x: torch.roll(x, 9, 2), "image_shift_x_9"))
 
+    loss_sum_for_each_augmentation_and_criterion = defaultdict(lambda: defaultdict(float))
+    loss_num_for_each_augmentation_and_criterion = defaultdict(lambda: defaultdict(int))
     sample_idx = 0
-    num_samples_to_save = 4
+    num_samples_to_save = float('inf')
+    # num_samples_to_save = 256
     for batch_idx, batch in enumerate(dataloader_tst):
         # Load the data
         stimuli, response = batch['stimulus'], batch['response']
+        stimuli = stimuli.to(device)
 
         # Create the metrics evaluation directory
         metrics_evaluation_path = os.path.join(project_dir_path, "metrics_evaluation")
@@ -150,9 +166,12 @@ def output_evaluation(device: torch.device, dataloader_tst: torch.utils.data.Dat
                 stimulus_augmented = torch.clamp(stimulus_augmented, 0, 1)
 
                 for criterion_name, criterion in criteria:
-                    # Make a blurred version of the stimulus, compute loss and save
-                    get_augmented_stimulus_loss(stimulus_torch, stimulus_augmented, criterion,
-                                                metrics_evaluation_path, sample_idx, criterion_name, augmentation_name)
+                    loss_augmented = torch.mean(criterion(stimulus_torch, stimulus_augmented)).cpu().numpy()
+                    loss_sum_for_each_augmentation_and_criterion[criterion_name][augmentation_name] += loss_augmented
+                    loss_num_for_each_augmentation_and_criterion[criterion_name][augmentation_name] += 1
+                    if save_images:
+                        save_augmented_stimulus_loss(stimulus_augmented, loss_augmented.item(),
+                                                     metrics_evaluation_path, sample_idx, criterion_name, augmentation_name)
 
             sample_idx += 1
 
@@ -160,6 +179,18 @@ def output_evaluation(device: torch.device, dataloader_tst: torch.utils.data.Dat
                 break
         if sample_idx >= num_samples_to_save:
             break
+
+    # Compute the average loss for each augmentation and criterion
+    loss_avg_for_each_augmentation_and_criterion = defaultdict(lambda: defaultdict(float))
+    for criterion_name, criterion in criteria:
+        for augmentation_name in loss_sum_for_each_augmentation_and_criterion[criterion_name].keys():
+            loss_avg_for_each_augmentation_and_criterion[criterion_name][augmentation_name] = \
+                loss_sum_for_each_augmentation_and_criterion[criterion_name][augmentation_name] / \
+                loss_num_for_each_augmentation_and_criterion[criterion_name][augmentation_name]
+
+    # Save the results
+    with open(os.path.join(metrics_evaluation_path, "loss_avg_for_each_augmentation_and_criterion.json"), 'w') as f:
+        json.dump(loss_avg_for_each_augmentation_and_criterion, f, indent=4)
 
 
 def main():
@@ -180,8 +211,8 @@ def main():
     logger.info('Device is {}'.format(device))
 
     # Evaluate the metrics
-    dataloader_tst = prepare_dataloader(config)
-    output_evaluation(device, dataloader_tst)
+    dataloader_trn, dataloader_tst = prepare_dataloader(config)
+    output_evaluation(device, dataloader_trn)
 
 
 if __name__ == "__main__":
