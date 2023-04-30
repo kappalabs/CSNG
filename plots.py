@@ -2,6 +2,37 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 
+def scatter_with_minimals(x, y, color, label):
+    x = np.array(x)
+    y = np.array(y)
+
+    idx = np.argsort(x)
+    x = x[idx]
+    y = y[idx]
+
+    # Plot the X and Y values as points
+    plt.scatter(x, y, color=color, s=15, label=label)
+
+    # create a variable to keep track of the minimum y value so far
+    min_y = np.inf
+
+    # create a list to store the coordinates of the points to be connected
+    points_to_connect = []
+
+    # iterate over the data and find the points with the minimum y value so far
+    for i in range(len(x)):
+        if y[i] < min_y:
+            min_y = y[i]
+            points_to_connect.append((x[i], y[i]))
+
+    # create the plot and connect the points with the minimum y value so far
+    # fig, ax = plt.subplots()
+    # ax.scatter(x, y)
+    for i in range(len(points_to_connect) - 1):
+        plt.plot([points_to_connect[i][0], points_to_connect[i + 1][0]],
+                 [points_to_connect[i][1], points_to_connect[i + 1][1]], color=color)
+
+
 # %%%
 models = ['LR', 'CNNv1', 'CNNv2', 'CNNv3', 'CNNv4']
 values_l1 = [0.07302, 0.07311, 0.07561, 0.07863, 0.08019]
@@ -168,7 +199,7 @@ x = df['dataset_limit_train']
 y = df['test.L1_central']
 
 # Plot the X and Y values as points
-plt.scatter(x, y)
+scatter_with_minimals(x, y, 'r', None)
 
 # show y axis grid
 plt.grid(axis='y')
@@ -500,7 +531,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the CSV file into a pandas DataFrame
-df = pd.read_csv('results/wandb_export_2023-04-22T16_00_57.102+02_00.csv')
+df = pd.read_csv('results/wandb_response_size_one_trial.csv')
 
 df = df[df['dataset_limit_responses'] > 200]
 
@@ -509,7 +540,7 @@ x = df['dataset_limit_responses']
 y = df['test.L1_central']
 
 # Plot the X and Y values as points
-plt.scatter(x, y)
+scatter_with_minimals(x, y, 'r', None)
 
 # show y axis grid
 plt.grid(axis='y')
@@ -541,7 +572,7 @@ x = df['dataset_limit_train']
 y = df['test.L1_central']
 
 # Plot the X and Y values as points
-plt.scatter(x, y)
+scatter_with_minimals(x, y, 'r', None)
 
 # show y axis grid
 plt.grid(axis='y')
@@ -600,3 +631,147 @@ for metric in data:
     # save the figure
     plt.savefig(f'augmentation_{metric}.png', dpi=500, bbox_inches='tight')
     plt.close()
+
+# %%
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# ALL
+
+df = pd.read_csv('results/wandb_response_size_one_trial.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses']
+y = df['test.L1_central']
+
+# Plot the X and Y values as points
+scatter_with_minimals(x, y, 'r', 'All')
+
+# L4
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('results/wandb_l4_num_neurons_cnnv3.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses']
+y = df['test.L1_central']
+
+# Plot the X and Y values as points
+scatter_with_minimals(x, y, 'g', 'L4')
+
+# L2/3
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('results/wandb_l23_num_neurons_cnnv3.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses']
+y = df['test.L1_central']
+
+# Plot the X and Y values as points
+scatter_with_minimals(x, y, 'b', 'L2/3')
+
+# show y axis grid
+plt.grid(axis='y')
+plt.grid(axis='x')
+# show smaller grid lines
+plt.minorticks_on()
+plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+
+# add labels for each scatter
+# plt.legend(['All', 'L4', 'L2/3'])
+plt.legend()
+
+# Set the title and axis labels
+plt.title('Number of Neurons vs L1 Loss')
+plt.xlabel('Number of Neurons')
+plt.ylabel('L1 Loss')
+
+# Display the plot
+plt.savefig('responses_size_groups_one_trial.png', dpi=500, bbox_inches='tight')
+plt.close()
+
+
+# %%
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# ALL
+
+df = pd.read_csv('results/wandb_response_size_one_trial.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses'].tolist()
+y = df['test.L1_central'].tolist()
+
+scatter_with_minimals(x, y, 'r', 'All')
+
+# L4
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('results/wandb_l4_num_neurons_cnnv3.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses']
+y = df['test.L1_central']
+
+scatter_with_minimals(x, y, 'g', 'L4')
+
+# L4 Exc
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('results/wandb_l4_exc_num_responses.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses']
+y = df['test.L1_central']
+
+# Plot the X and Y values as points
+scatter_with_minimals(x, y, 'y', 'L4 Exc')
+
+# L4 Inh
+
+# Load the CSV file into a pandas DataFrame
+df = pd.read_csv('results/wandb_l4_inh_num_responses.csv')
+
+df = df[df['dataset_limit_responses'] > 200]
+df = df[df['test.L1_central'] < 0.3]
+
+# Extract the X and Y values from the DataFrame
+x = df['dataset_limit_responses']
+y = df['test.L1_central']
+
+# Plot the X and Y values as points
+scatter_with_minimals(x, y, 'purple', 'L4 Inh')
+
+# show y axis grid
+plt.grid(axis='y')
+plt.grid(axis='x')
+# show smaller grid lines
+plt.minorticks_on()
+plt.grid(which='minor', linestyle=':', linewidth='0.3', color='black')
+
+# add labels for each scatter
+plt.legend()
+
+# Set the title and axis labels
+plt.title('Number of Neurons vs L1 Loss')
+plt.xlabel('Number of Neurons')
+plt.ylabel('L1 Loss')
+
+# Display the plot
+plt.savefig('responses_size_l4_groups_one_trial.png', dpi=500, bbox_inches='tight')
+plt.close()
