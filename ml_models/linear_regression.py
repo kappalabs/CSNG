@@ -110,3 +110,7 @@ class LinearRegressionModel(ModelBase):
         biases = np.reshape(biases, (110, 110))
 
         return weights, biases
+
+    def predict_batch_with_intermediate(self, batch: torch.FloatTensor) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+        super().predict_batch_with_intermediate(batch)
+        raise NotImplementedError
