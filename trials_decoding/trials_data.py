@@ -1,4 +1,5 @@
 import os
+import ast
 import copy
 import pickle
 import torch.utils.data
@@ -14,7 +15,7 @@ class TrialsData:
     def __init__(self, train_part=0.7, val_part=0.1, datanorm_stimuli=None, datanorm_response=None, num_trials=10,
                  seed=42, limit_train=-1, limit_val=-1, limit_test=-1, limit_responses=-1,
                  dont_use_l4=False, dont_use_l23=False, dont_use_inhibitory=False, dont_use_excitatory=False,
-                 debug_save_images=False):
+                 average_trials=False, debug_save_images=False):
         self.train_part = train_part
         self.val_part = val_part
         self.datanorm_stimuli = datanorm_stimuli
@@ -29,6 +30,7 @@ class TrialsData:
         self.dont_use_l23 = dont_use_l23
         self.dont_use_inhibitory = dont_use_inhibitory
         self.dont_use_excitatory = dont_use_excitatory
+        self.average_trials = average_trials
         self.debug_save_images = debug_save_images
 
         # Load the dataset from pickle file
@@ -46,15 +48,13 @@ class TrialsData:
         self.num_all_data = len(self.dataset)
 
         def get_image_name(sample_info: str):
-            import re
-            image_name = re.sub(r'.*image_location', '', sample_info)
-            image_name = re.sub(r'.*/', '', image_name)
-            image_name = re.sub(r'\'.*', '', image_name)
+            sample_info_dict = ast.literal_eval(sample_info)
+            image_name = sample_info_dict['image_location']
+            image_name = image_name.split('/')[-1]
 
             return image_name
 
         if self.debug_save_images:
-            import re
             from PIL import Image
             for sample_info, sample_dict in self.dataset.items():
                 sample_stimulus = sample_dict['stimulus']
@@ -135,14 +135,46 @@ class TrialsData:
             sample_filename = get_image_name(sample_info)
 
             if sample_filename in keys_train:
-                self.dataset_train['response'].append(sample_response)
-                self.dataset_train['stimulus'].append(sample_stimulus)
+                self.dataset_train['response'].append((sample_response, sample_filename))
+                self.dataset_train['stimulus'].append((sample_stimulus, sample_filename))
             elif sample_filename in keys_val:
-                self.dataset_val['response'].append(sample_response)
-                self.dataset_val['stimulus'].append(sample_stimulus)
+                self.dataset_val['response'].append((sample_response, sample_filename))
+                self.dataset_val['stimulus'].append((sample_stimulus, sample_filename))
             else:
-                self.dataset_test['response'].append(sample_response)
-                self.dataset_test['stimulus'].append(sample_stimulus)
+                self.dataset_test['response'].append((sample_response, sample_filename))
+                self.dataset_test['stimulus'].append((sample_stimulus, sample_filename))
+
+        def average_trials(data):
+            # Get the unique filenames
+            unique_filenames = np.unique([x[1] for x in data])
+            # Average the data with the same sample_filename
+            averaged_data = []
+            for filename in unique_filenames:
+                # Get the data with the same sample_filename
+                data_with_same_filename = [x[0] for x in data if x[1] == filename]
+                # Average the data
+                averaged_data_with_same_filename = np.mean(data_with_same_filename, axis=0)
+                # Append the averaged data
+                averaged_data.append((averaged_data_with_same_filename, filename))
+            return averaged_data
+
+        # Average the data with the same sample_filename
+        if self.average_trials:
+            self.dataset_train['response'] = average_trials(self.dataset_train['response'])
+            self.dataset_train['stimulus'] = average_trials(self.dataset_train['stimulus'])
+            # Dont average the validation and test data
+            # self.dataset_val['response'] = average_trials(self.dataset_val['response'])
+            # self.dataset_val['stimulus'] = average_trials(self.dataset_val['stimulus'])
+            # self.dataset_test['response'] = average_trials(self.dataset_test['response'])
+            # self.dataset_test['stimulus'] = average_trials(self.dataset_test['stimulus'])
+
+        # Remove the trial dimension
+        self.dataset_train['response'] = [x[0] for x in self.dataset_train['response']]
+        self.dataset_train['stimulus'] = [x[0] for x in self.dataset_train['stimulus']]
+        self.dataset_val['response'] = [x[0] for x in self.dataset_val['response']]
+        self.dataset_val['stimulus'] = [x[0] for x in self.dataset_val['stimulus']]
+        self.dataset_test['response'] = [x[0] for x in self.dataset_test['response']]
+        self.dataset_test['stimulus'] = [x[0] for x in self.dataset_test['stimulus']]
 
         # Training data
         self.response_dataset_train = np.asarray(self.dataset_train['response'][:self.limit_train], dtype=np.float32)

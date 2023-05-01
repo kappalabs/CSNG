@@ -21,8 +21,8 @@ def get_configuration():
     default_config = {
         "project_name": "trials_decoding",
         "learning_rate": 2e-4,
-        "num_epochs": 64,
-        "batch_size": 16,
+        "num_epochs": 15,
+        "batch_size": 64,
         "num_workers": 4,
         "dataset_num_trials": 10,
         "dataset_limit_train": -1,
@@ -46,6 +46,7 @@ def get_configuration():
         "dataset_dont_use_l23": False,
         "dataset_dont_use_inhibitory": False,
         "dataset_dont_use_excitatory": False,
+        "dataset_average_trials": False,
     }
 
     parser = argparse.ArgumentParser()
@@ -80,6 +81,8 @@ def get_configuration():
                         action='store_true')
     parser.add_argument('--dataset_dont_use_excitatory', default=default_config['dataset_dont_use_excitatory'],
                         action='store_true')
+    parser.add_argument('--dataset_average_trials', default=default_config['dataset_average_trials'],
+                        action='store_true')
 
     args = parser.parse_args()
     default_config.update(vars(args))
@@ -101,6 +104,7 @@ def load_checkpoint(config: dict, checkpoint_filepath: str, device: torch.device
         dont_use_l23=config['dataset_dont_use_l23'],
         dont_use_inhibitory=config['dataset_dont_use_inhibitory'],
         dont_use_excitatory=config['dataset_dont_use_excitatory'],
+        average_trials=config['dataset_average_trials'],
     )
     dataset_trn = TrialsDataset(data, data_type='train')
     dataset_val = TrialsDataset(data, data_type='validation')
